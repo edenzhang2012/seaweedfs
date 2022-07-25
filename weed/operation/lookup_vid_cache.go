@@ -17,7 +17,7 @@ type VidInfo struct {
 }
 type VidCache struct {
 	sync.RWMutex
-	cache []VidInfo
+	cache []VidInfo //按照ID顺序排列存放，便于查找，不用每次都遍历
 }
 
 func (vc *VidCache) Get(vid string) ([]Location, error) {

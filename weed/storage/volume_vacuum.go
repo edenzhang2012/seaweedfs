@@ -82,12 +82,14 @@ func (v *Volume) Compact2(preallocate int64, compactionBytePerSecond int64, prog
 	if v.DataBackend == nil {
 		return fmt.Errorf("volume %d backend is empty remote:%v", v.Id, v.HasRemoteFile())
 	}
+	//do flush
 	if err := v.DataBackend.Sync(); err != nil {
 		glog.V(0).Infof("compact2 fail to sync volume dat %d: %v", v.Id, err)
 	}
 	if err := v.nm.Sync(); err != nil {
 		glog.V(0).Infof("compact2 fail to sync volume idx %d: %v", v.Id, err)
 	}
+	//根据index file对volume做压缩
 	return copyDataBasedOnIndexFile(v.FileName(".dat"), v.FileName(".idx"), v.FileName(".cpd"), v.FileName(".cpx"), v.SuperBlock, v.Version(), preallocate, compactionBytePerSecond, progressFn)
 }
 
@@ -106,8 +108,10 @@ func (v *Volume) CommitCompact() error {
 	defer v.dataFileAccessLock.Unlock()
 
 	glog.V(3).Infof("Got volume %d committing lock...", v.Id)
+	//关闭compact阶段打开的nm
 	v.nm.Close()
 	if v.DataBackend != nil {
+		//close DataBackend
 		if err := v.DataBackend.Close(); err != nil {
 			glog.V(0).Infof("fail to close volume %d", v.Id)
 		}
@@ -116,6 +120,7 @@ func (v *Volume) CommitCompact() error {
 	stats.VolumeServerVolumeCounter.WithLabelValues(v.Collection, "volume").Dec()
 
 	var e error
+	//检查老的.dat与.idx是否更新过，如果更新过，则同步更新内容到新的文件内。若成功则删除旧的文件，若失败删除新建的文件
 	if e = v.makeupDiff(v.FileName(".cpd"), v.FileName(".cpx"), v.FileName(".dat"), v.FileName(".idx")); e != nil {
 		glog.V(0).Infof("makeupDiff in CommitCompact volume %d failed %v", v.Id, e)
 		e = os.Remove(v.FileName(".cpd"))
@@ -152,6 +157,7 @@ func (v *Volume) CommitCompact() error {
 	os.RemoveAll(v.FileName(".ldb"))
 
 	glog.V(3).Infof("Loading volume %d commit file...", v.Id)
+	//加载新的volume数据到系统中
 	if e = v.load(true, false, v.needleMapKind, 0); e != nil {
 		return e
 	}
@@ -392,16 +398,19 @@ func (v *Volume) copyDataAndGenerateIndexFile(dstName, idxName string, prealloca
 	return nm.SaveToIdx(idxName)
 }
 
+//将数据从旧的volume迁移到新的volume，包括.dat文件和.idx文件,迁移的过程中会去掉已经被删除掉的块，从而达到压实的目的
 func copyDataBasedOnIndexFile(srcDatName, srcIdxName, dstDatName, datIdxName string, sb super_block.SuperBlock, version needle.Version, preallocate, compactionBytePerSecond int64, progressFn ProgressFunc) (err error) {
 	var (
 		srcDatBackend, dstDatBackend backend.BackendStorageFile
 		dataFile                     *os.File
 	)
+	//创建新的volume文件
 	if dstDatBackend, err = backend.CreateVolumeFile(dstDatName, preallocate, 0); err != nil {
 		return err
 	}
 	defer dstDatBackend.Close()
 
+	//创建needlemap管理的数据库句柄
 	oldNm := needle_map.NewMemDb()
 	defer oldNm.Close()
 	newNm := needle_map.NewMemDb()
@@ -417,13 +426,16 @@ func copyDataBasedOnIndexFile(srcDatName, srcIdxName, dstDatName, datIdxName str
 
 	now := uint64(time.Now().Unix())
 
+	//写入superblock到新的volume中
 	sb.CompactionRevision++
 	dstDatBackend.WriteAt(sb.Bytes(), 0)
 	newOffset := int64(sb.BlockSize())
 
+	//限流？
 	writeThrottler := util.NewWriteThrottler(compactionBytePerSecond)
 
-	err = oldNm.AscendingVisit(func(value needle_map.NeedleValue) error {
+	//遍历needle_map中的所有项，根据传入的闭包函数执行不同的操作；这里的操作是转移旧的volume数据到新的volume
+	err = oldNm.AscendingVisit(func(value needle_map.NeedleValue) error { //匿名函数:根据eedle_map.NeedleValue记录将旧的volume数据中的needle数据转移到新的volume中
 
 		offset, size := value.Offset, value.Size
 
@@ -438,22 +450,27 @@ func copyDataBasedOnIndexFile(srcDatName, srcIdxName, dstDatName, datIdxName str
 		}
 
 		n := new(needle.Needle)
+		//按照index文件的元数据内容将数据从旧volume中读取到needle内
 		if err := n.ReadData(srcDatBackend, offset.ToActualOffset(), size, version); err != nil {
 			return fmt.Errorf("cannot hydrate needle from file: %s", err)
 		}
 
+		//如果该needle刚好过期，返回
 		if n.HasTtl() && now >= n.LastModified+uint64(sb.Ttl.Minutes()*60) {
 			return nil
 		}
 
+		//在新的needlemap中设置needle
 		if err = newNm.Set(n.Id, ToOffset(newOffset), n.Size); err != nil {
 			return fmt.Errorf("cannot put needle: %s", err)
 		}
+		//needle数据写入到dstDatBackend文件中
 		if _, _, _, err = n.Append(dstDatBackend, sb.Version); err != nil {
 			return fmt.Errorf("cannot append needle: %s", err)
 		}
 		delta := n.DiskSize(version)
 		newOffset += delta
+		//简单的限流，根据时间段内传输的数据量判断是否超过某个阈值，若超过则sleep一定的时间
 		writeThrottler.MaybeSlowdown(delta)
 		glog.V(4).Infoln("saving key", n.Id, "volume offset", offset, "=>", newOffset, "data_size", n.Size)
 
@@ -463,6 +480,7 @@ func copyDataBasedOnIndexFile(srcDatName, srcIdxName, dstDatName, datIdxName str
 		return err
 	}
 
+	//将newNm中的数据写入到datIdxName文件中
 	return newNm.SaveToIdx(datIdxName)
 
 }

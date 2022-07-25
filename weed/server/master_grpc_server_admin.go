@@ -3,14 +3,15 @@ package weed_server
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"sync"
+	"time"
+
 	"github.com/chrislusf/seaweedfs/weed/cluster"
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/pb"
 	"github.com/chrislusf/seaweedfs/weed/pb/filer_pb"
 	"github.com/chrislusf/seaweedfs/weed/pb/volume_server_pb"
-	"math/rand"
-	"sync"
-	"time"
 
 	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 )
@@ -147,6 +148,7 @@ func (ms *MasterServer) ReleaseAdminToken(ctx context.Context, req *master_pb.Re
 	return resp, nil
 }
 
+//检查对应的组件是否存活
 func (ms *MasterServer) Ping(ctx context.Context, req *master_pb.PingRequest) (resp *master_pb.PingResponse, pingErr error) {
 	resp = &master_pb.PingResponse{
 		StartTimeNs: time.Now().UnixNano(),

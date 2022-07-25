@@ -56,6 +56,7 @@ func ungzipData(input []byte) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
+//解压缩数据
 func DecompressData(input []byte) ([]byte, error) {
 	if IsGzippedContent(input) {
 		return ungzipData(input)
@@ -68,6 +69,7 @@ func DecompressData(input []byte) ([]byte, error) {
 	return input, UnsupportedCompression
 }
 
+//查找数据压缩标识，匹配gzip的压缩算法
 func IsGzippedContent(data []byte) bool {
 	if len(data) < 2 {
 		return false
@@ -98,7 +100,9 @@ func IsZstdContent(data []byte) bool {
 
 /*
 * Default not to compressed since compression can be done on client side.
- */func IsCompressableFileType(ext, mtype string) (shouldBeCompressed, iAmSure bool) {
+判断数据是否可以压缩
+*/
+func IsCompressableFileType(ext, mtype string) (shouldBeCompressed, iAmSure bool) {
 
 	// text
 	if strings.HasPrefix(mtype, "text/") {

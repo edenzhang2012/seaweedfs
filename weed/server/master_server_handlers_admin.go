@@ -3,11 +3,12 @@ package weed_server
 import (
 	"context"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/pb"
-	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 	"math/rand"
 	"net/http"
 	"strconv"
+
+	"github.com/chrislusf/seaweedfs/weed/pb"
+	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/operation"
@@ -135,23 +136,28 @@ func (ms *MasterServer) submitFromMasterServerHandler(w http.ResponseWriter, r *
 	}
 }
 
+//http接口传参参数解析
 func (ms *MasterServer) getVolumeGrowOption(r *http.Request) (*topology.VolumeGrowOption, error) {
 	replicationString := r.FormValue("replication")
 	if replicationString == "" {
 		replicationString = ms.option.DefaultReplicaPlacement
 	}
+	//解析replicationString
 	replicaPlacement, err := super_block.NewReplicaPlacementFromString(replicationString)
 	if err != nil {
 		return nil, err
 	}
+	//解析ttl
 	ttl, err := needle.ReadTTL(r.FormValue("ttl"))
 	if err != nil {
 		return nil, err
 	}
+	//字符串转换为数字
 	memoryMapMaxSizeMb, err := memory_map.ReadMemoryMapMaxSizeMb(r.FormValue("memoryMapMaxSizeMb"))
 	if err != nil {
 		return nil, err
 	}
+	//transform disktype
 	diskType := types.ToDiskType(r.FormValue("disk"))
 
 	preallocate := ms.preallocateSize

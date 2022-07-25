@@ -25,6 +25,7 @@ func (vs *VolumeServer) GetMaster() pb.ServerAddress {
 	return vs.currentMaster
 }
 
+// 检查与master的连接，只要任意一个可以连接，即可确认没问题
 func (vs *VolumeServer) checkWithMaster() (err error) {
 	for {
 		for _, master := range vs.SeedMasterNodes {
@@ -47,6 +48,7 @@ func (vs *VolumeServer) checkWithMaster() (err error) {
 	}
 }
 
+// hearbeat to master
 func (vs *VolumeServer) heartbeat() {
 
 	glog.V(0).Infof("Volume server start with seed master nodes: %v", vs.SeedMasterNodes)
@@ -89,6 +91,7 @@ func (vs *VolumeServer) StopHeartbeat() (isAlreadyStopping bool) {
 	return false
 }
 
+//向master建立heartbeat连接，流式连接
 func (vs *VolumeServer) doHeartbeat(masterAddress pb.ServerAddress, grpcDialOption grpc.DialOption, sleepInterval time.Duration) (newLeader pb.ServerAddress, err error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -118,6 +121,7 @@ func (vs *VolumeServer) doHeartbeat(masterAddress pb.ServerAddress, grpcDialOpti
 				doneChan <- err
 				return
 			}
+			//master检测到已经存在相同的volume服务，则退出本服务
 			if len(in.DuplicatedUuids) > 0 {
 				var duplicateDir []string
 				for _, loc := range vs.store.Locations {
@@ -130,6 +134,7 @@ func (vs *VolumeServer) doHeartbeat(masterAddress pb.ServerAddress, grpcDialOpti
 				glog.Errorf("Shut down Volume Server due to duplicate volume directories: %v", duplicateDir)
 				os.Exit(1)
 			}
+			//master限制了volume的大小，以master配置为准
 			if in.GetVolumeSizeLimit() != 0 && vs.store.GetVolumeSizeLimit() != in.GetVolumeSizeLimit() {
 				vs.store.SetVolumeSizeLimit(in.GetVolumeSizeLimit())
 				if vs.store.MaybeAdjustVolumeMax() {

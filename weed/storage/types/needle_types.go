@@ -37,7 +37,7 @@ const (
 	NeedleMapEntrySize = NeedleIdSize + OffsetSize + SizeSize
 	TimestampSize      = 8 // int64 size
 	NeedlePaddingSize  = 8
-	TombstoneFileSize  = Size(-1)
+	TombstoneFileSize  = Size(-1) //墓碑文件，标记文件已删除
 	CookieSize         = 4
 )
 

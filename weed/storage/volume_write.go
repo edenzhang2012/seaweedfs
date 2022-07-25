@@ -31,11 +31,13 @@ func (v *Volume) checkReadWriteError(err error) {
 
 // isFileUnchanged checks whether this needle to write is same as last one.
 // It requires serialized access in the same volume.
+//通过读取dat文件中的needle与传入的needle对比判断是否是同一个needle
 func (v *Volume) isFileUnchanged(n *needle.Needle) bool {
 	if v.Ttl.String() != "" {
 		return false
 	}
 
+	//读取needlemap数据
 	nv, ok := v.nm.Get(n.Id)
 	if ok && !nv.Offset.IsZero() && nv.Size.IsValid() {
 		oldNeedle := new(needle.Needle)
@@ -44,7 +46,7 @@ func (v *Volume) isFileUnchanged(n *needle.Needle) bool {
 			glog.V(0).Infof("Failed to check updated file at offset %d size %d: %v", nv.Offset.ToActualOffset(), nv.Size, err)
 			return false
 		}
-		if oldNeedle.Cookie == n.Cookie && oldNeedle.Checksum == n.Checksum && bytes.Equal(oldNeedle.Data, n.Data) {
+		if oldNeedle.Cookie == n.Cookie && oldNeedle.Checksum == n.Checksum && bytes.Equal(oldNeedle.Data, n.Data) { //判断cookie、checksum、data是否相同
 			n.DataSize = oldNeedle.DataSize
 			return true
 		}
@@ -87,10 +89,12 @@ func removeVolumeFiles(filename string) {
 	os.Remove(filename + ".note")
 }
 
+//写needle和删除needle会调用，信号异步请求通知
 func (v *Volume) asyncRequestAppend(request *needle.AsyncRequest) {
 	v.asyncRequestsChan <- request
 }
 
+//同步写入
 func (v *Volume) syncWrite(n *needle.Needle, checkCookie bool) (offset uint64, size Size, isUnchanged bool, err error) {
 	// glog.V(4).Infof("writing needle %s", needle.NewFileIdFromNeedle(v.Id, n).String())
 	actualSize := needle.GetActualSize(Size(len(n.Data)), v.Version())
@@ -106,6 +110,7 @@ func (v *Volume) syncWrite(n *needle.Needle, checkCookie bool) (offset uint64, s
 	return v.doWriteRequest(n, checkCookie)
 }
 
+//写入needle
 func (v *Volume) writeNeedle2(n *needle.Needle, checkCookie bool, fsync bool) (offset uint64, size Size, isUnchanged bool, err error) {
 	// glog.V(4).Infof("writing needle %s", needle.NewFileIdFromNeedle(v.Id, n).String())
 	if n.Ttl == needle.EMPTY_TTL && v.Ttl != needle.EMPTY_TTL {
@@ -113,7 +118,7 @@ func (v *Volume) writeNeedle2(n *needle.Needle, checkCookie bool, fsync bool) (o
 		n.Ttl = v.Ttl
 	}
 
-	if !fsync {
+	if !fsync { //同步写入
 		return v.syncWrite(n, checkCookie)
 	} else {
 		asyncRequest := needle.NewAsyncRequest(n, true)
@@ -127,9 +132,11 @@ func (v *Volume) writeNeedle2(n *needle.Needle, checkCookie bool, fsync bool) (o
 	}
 }
 
+//处理写请求，先校验，然后将needle信息写入dat文件最后将needle信息写入needlemap
 func (v *Volume) doWriteRequest(n *needle.Needle, checkCookie bool) (offset uint64, size Size, isUnchanged bool, err error) {
 	// glog.V(4).Infof("writing needle %s", needle.NewFileIdFromNeedle(v.Id, n).String())
-	if v.isFileUnchanged(n) {
+	//TODO: 重复请求？？？
+	if v.isFileUnchanged(n) { //判断是否是重复请求
 		size = Size(n.DataSize)
 		isUnchanged = true
 		return
@@ -143,7 +150,7 @@ func (v *Volume) doWriteRequest(n *needle.Needle, checkCookie bool) (offset uint
 			err = fmt.Errorf("reading existing needle: %v", existingNeedleReadErr)
 			return
 		}
-		if n.Cookie == 0 && !checkCookie {
+		if n.Cookie == 0 && !checkCookie { //如果cookie为0，不校验cookie
 			// this is from batch deletion, and read back again when tailing a remote volume
 			// which only happens when checkCookie == false and fsync == false
 			n.Cookie = existingNeedle.Cookie
@@ -208,6 +215,7 @@ func (v *Volume) deleteNeedle2(n *needle.Needle) (Size, error) {
 	}
 }
 
+//处理文件删除请求
 func (v *Volume) doDeleteRequest(n *needle.Needle) (Size, error) {
 	glog.V(4).Infof("delete needle %s", needle.NewFileIdFromNeedle(v.Id, n).String())
 	nv, ok := v.nm.Get(n.Id)
@@ -216,12 +224,14 @@ func (v *Volume) doDeleteRequest(n *needle.Needle) (Size, error) {
 		size := nv.Size
 		n.Data = nil
 		n.AppendAtNs = uint64(time.Now().UnixNano())
+		//向dat文件中appendneedle删除信息
 		offset, _, _, err := n.Append(v.DataBackend, v.Version())
 		v.checkReadWriteError(err)
 		if err != nil {
 			return size, err
 		}
 		v.lastAppendAtNs = n.AppendAtNs
+		//从needlemap删除对应的needle
 		if err = v.nm.Delete(n.Id, ToOffset(int64(offset))); err != nil {
 			return size, err
 		}
@@ -230,6 +240,7 @@ func (v *Volume) doDeleteRequest(n *needle.Needle) (Size, error) {
 	return 0, nil
 }
 
+// 启动volume 异步IO
 func (v *Volume) startWorker() {
 	go func() {
 		chanClosed := false
@@ -241,12 +252,14 @@ func (v *Volume) startWorker() {
 			currentRequests := make([]*needle.AsyncRequest, 0, 128)
 			currentBytesToWrite := int64(0)
 			for {
+				//阻塞等待异步请求，当请求数据总数大于4M或者请求数大于128又或者此时没有其他请求在等待，为了防止IO延时太大，退出等待
 				request, ok := <-v.asyncRequestsChan
 				// volume may be closed
 				if !ok {
 					chanClosed = true
 					break
 				}
+				//判断要写的内容是否已经超过volume限额大小，超出则退出
 				if MaxPossibleVolumeSize < v.ContentSize()+uint64(currentBytesToWrite+request.ActualSize) {
 					request.Complete(0, 0, false,
 						fmt.Errorf("volume size limit %d exceeded! current size is %d", MaxPossibleVolumeSize, v.ContentSize()))
@@ -265,7 +278,7 @@ func (v *Volume) startWorker() {
 			}
 			v.dataFileAccessLock.Lock()
 			end, _, e := v.DataBackend.GetStat()
-			if e != nil {
+			if e != nil { //dat文件访问失败，标记IO失败
 				for i := 0; i < len(currentRequests); i++ {
 					currentRequests[i].Complete(0, 0, false,
 						fmt.Errorf("cannot read current volume position: %v", e))
@@ -274,6 +287,7 @@ func (v *Volume) startWorker() {
 				continue
 			}
 
+			//处理IO请求
 			for i := 0; i < len(currentRequests); i++ {
 				if currentRequests[i].IsWriteRequest {
 					offset, size, isUnchanged, err := v.doWriteRequest(currentRequests[i].N, true)

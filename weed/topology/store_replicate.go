@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"google.golang.org/grpc"
 
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/operation"
@@ -20,6 +21,7 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/util"
 )
 
+//needle多副本数据落盘
 func ReplicatedWrite(masterFn operation.GetMasterFn, grpcDialOption grpc.DialOption, s *storage.Store, volumeId needle.VolumeId, n *needle.Needle, r *http.Request) (isUnchanged bool, err error) {
 
 	//check JWT
@@ -42,7 +44,7 @@ func ReplicatedWrite(masterFn operation.GetMasterFn, grpcDialOption grpc.DialOpt
 		fsync = true
 	}
 
-	if s.GetVolume(volumeId) != nil {
+	if s.GetVolume(volumeId) != nil { //local volume存在
 		isUnchanged, err = s.WriteVolumeNeedle(volumeId, n, true, fsync)
 		if err != nil {
 			stats.VolumeServerRequestCounter.WithLabelValues(stats.ErrorWriteToLocalDisk).Inc()
@@ -174,10 +176,11 @@ func DistributedOperation(locations []operation.Location, op func(location opera
 	return ret.Error()
 }
 
+//获取多副本数据落盘信息
 func GetWritableRemoteReplications(s *storage.Store, grpcDialOption grpc.DialOption, volumeId needle.VolumeId, masterFn operation.GetMasterFn) (remoteLocations []operation.Location, err error) {
 
 	v := s.GetVolume(volumeId)
-	if v != nil && v.ReplicaPlacement.GetCopyCount() == 1 {
+	if v != nil && v.ReplicaPlacement.GetCopyCount() == 1 { //单副本不需要同步
 		return
 	}
 
@@ -195,10 +198,10 @@ func GetWritableRemoteReplications(s *storage.Store, grpcDialOption grpc.DialOpt
 		return
 	}
 
-	if v != nil {
+	if v != nil { //本地有副本
 		// has one local and has remote replications
 		copyCount := v.ReplicaPlacement.GetCopyCount()
-		if len(lookupResult.Locations) < copyCount {
+		if len(lookupResult.Locations) < copyCount { //本地副本数小于配置的副本数
 			err = fmt.Errorf("replicating opetations [%d] is less than volume %d replication copy count [%d]",
 				len(lookupResult.Locations), volumeId, copyCount)
 		}

@@ -22,10 +22,13 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/topology"
 )
 
+//将heartbeat发送过来的UUID添加到UUIDMap，不允许重复加载同一个连接
 func (ms *MasterServer) RegisterUuids(heartbeat *master_pb.Heartbeat) (duplicated_uuids []string, err error) {
 	ms.Topo.UuidAccessLock.Lock()
 	defer ms.Topo.UuidAccessLock.Unlock()
+	//以IP+port唯一确定
 	key := fmt.Sprintf("%s:%d", heartbeat.Ip, heartbeat.Port)
+	//初始化
 	if ms.Topo.UuidMap == nil {
 		ms.Topo.UuidMap = make(map[string][]string)
 	}
@@ -60,8 +63,10 @@ func (ms *MasterServer) UnRegisterUuids(ip string, port int) {
 func (ms *MasterServer) SendHeartbeat(stream master_pb.Seaweed_SendHeartbeatServer) error {
 	var dn *topology.DataNode
 
+	//当退出时，进行资源的清理
 	defer func() {
 		if dn != nil {
+			//并发情况下连接数清理，只有当Counter为0时才认为volume server已经离线，通知其他client去掉相应的volume
 			dn.Counter--
 			if dn.Counter > 0 {
 				glog.V(0).Infof("disconnect phantom volume server %s:%d remaining %d", dn.Ip, dn.Port, dn.Counter)
@@ -91,6 +96,7 @@ func (ms *MasterServer) SendHeartbeat(stream master_pb.Seaweed_SendHeartbeatServ
 	}()
 
 	for {
+		//等待客户端的消息
 		heartbeat, err := stream.Recv()
 		if err != nil {
 			if dn != nil {
@@ -104,13 +110,18 @@ func (ms *MasterServer) SendHeartbeat(stream master_pb.Seaweed_SendHeartbeatServ
 
 		ms.Topo.Sequence.SetMax(heartbeat.MaxFileKey)
 
+		//第一次通讯
 		if dn == nil {
 			dcName, rackName := ms.Topo.Configuration.Locate(heartbeat.Ip, heartbeat.DataCenter, heartbeat.Rack)
+			//获取datacenter结构，若不存在则创建
 			dc := ms.Topo.GetOrCreateDataCenter(dcName)
+			//获取rack结构，若不存在则创建
 			rack := dc.GetOrCreateRack(rackName)
+			//获取DataNode，若不存在则创建
 			dn = rack.GetOrCreateDataNode(heartbeat.Ip, int(heartbeat.Port), int(heartbeat.GrpcPort), heartbeat.PublicUrl, heartbeat.MaxVolumeCounts)
 			glog.V(0).Infof("added volume server %d: %v:%d %v", dn.Counter, heartbeat.GetIp(), heartbeat.GetPort(), heartbeat.LocationUuids)
 			uuidlist, err := ms.RegisterUuids(heartbeat)
+			//发送失败信息
 			if err != nil {
 				if stream_err := stream.Send(&master_pb.HeartbeatResponse{
 					DuplicatedUuids: uuidlist,
@@ -121,6 +132,7 @@ func (ms *MasterServer) SendHeartbeat(stream master_pb.Seaweed_SendHeartbeatServ
 				return err
 			}
 
+			//发送回复信息，告知VolumeSizeLimit
 			if err := stream.Send(&master_pb.HeartbeatResponse{
 				VolumeSizeLimit: uint64(ms.option.VolumeSizeLimitMB) * 1024 * 1024,
 			}); err != nil {
@@ -181,6 +193,7 @@ func (ms *MasterServer) SendHeartbeat(stream master_pb.Seaweed_SendHeartbeatServ
 			}
 		}
 
+		//EC相关
 		if len(heartbeat.NewEcShards) > 0 || len(heartbeat.DeletedEcShards) > 0 {
 			stats.MasterReceivedHeartbeatCounter.WithLabelValues("newEcShards").Inc()
 			// update master internal volume layouts
@@ -216,6 +229,7 @@ func (ms *MasterServer) SendHeartbeat(stream master_pb.Seaweed_SendHeartbeatServ
 
 		}
 		if len(message.NewVids) > 0 || len(message.DeletedVids) > 0 || len(message.NewEcVids) > 0 || len(message.DeletedEcVids) > 0 {
+			//通知到所有的客户端关于volume的变化
 			ms.broadcastToClients(&master_pb.KeepConnectedResponse{VolumeLocation: message})
 		}
 
@@ -238,11 +252,13 @@ func (ms *MasterServer) SendHeartbeat(stream master_pb.Seaweed_SendHeartbeatServ
 // And clients gets the up-to-date list of volume locations
 func (ms *MasterServer) KeepConnected(stream master_pb.Seaweed_KeepConnectedServer) error {
 
+	//等待客户端数据流信息
 	req, recvErr := stream.Recv()
 	if recvErr != nil {
 		return recvErr
 	}
 
+	//如果自己已不是leader，返回leader连接信息
 	if !ms.Topo.IsLeader() {
 		return ms.informNewLeader(stream)
 	}
@@ -254,13 +270,17 @@ func (ms *MasterServer) KeepConnected(stream master_pb.Seaweed_KeepConnectedServ
 
 	clientName, messageChan := ms.addClient(req.FilerGroup, req.ClientType, peerAddress)
 	for _, update := range ms.Cluster.AddClusterNode(req.FilerGroup, req.ClientType, peerAddress, req.Version) {
+		//将每个事件通知到其他所有客户端
 		ms.broadcastToClients(update)
 	}
 
+	//当连接断开时，移除当前节点并通知所有客户端
 	defer func() {
 		for _, update := range ms.Cluster.RemoveClusterNode(req.FilerGroup, req.ClientType, peerAddress) {
+			//通知所有其他客户端
 			ms.broadcastToClients(update)
 		}
+		//删除client
 		ms.deleteClient(clientName)
 	}()
 	for i, message := range ms.Topo.ToVolumeLocations() {
@@ -269,11 +289,13 @@ func (ms *MasterServer) KeepConnected(stream master_pb.Seaweed_KeepConnectedServ
 				message.Leader = string(leader)
 			}
 		}
+		//发送volumelocation
 		if sendErr := stream.Send(&master_pb.KeepConnectedResponse{VolumeLocation: message}); sendErr != nil {
 			return sendErr
 		}
 	}
 
+	//协程，接收返回信息，保持连接，但不做任何处理，直到流式连接断开
 	go func() {
 		for {
 			_, err := stream.Recv()
@@ -288,11 +310,13 @@ func (ms *MasterServer) KeepConnected(stream master_pb.Seaweed_KeepConnectedServ
 	ticker := time.NewTicker(5 * time.Second)
 	for {
 		select {
+		//将brodcast消息内容转发给client
 		case message := <-messageChan:
 			if err := stream.Send(message); err != nil {
 				glog.V(0).Infof("=> client %v: %+v", clientName, message)
 				return err
 			}
+		//每5秒检查一次，如果自己不是leader了，告知新leader的连接方式
 		case <-ticker.C:
 			if !ms.Topo.IsLeader() {
 				stats.MasterRaftIsleader.Set(0)
@@ -300,6 +324,7 @@ func (ms *MasterServer) KeepConnected(stream master_pb.Seaweed_KeepConnectedServ
 			} else {
 				stats.MasterRaftIsleader.Set(1)
 			}
+		//若stream接收发生错误，退出
 		case <-stopChan:
 			return nil
 		}
@@ -315,6 +340,7 @@ func (ms *MasterServer) broadcastToClients(message *master_pb.KeepConnectedRespo
 	ms.clientChansLock.RUnlock()
 }
 
+//告知client端leader信息
 func (ms *MasterServer) informNewLeader(stream master_pb.Seaweed_KeepConnectedServer) error {
 	leader, err := ms.Topo.Leader()
 	if err != nil {
@@ -377,6 +403,7 @@ func findClientAddress(ctx context.Context, grpcPort uint32) string {
 
 }
 
+//获取一些跟volume相关的基本配置信息
 func (ms *MasterServer) GetMasterConfiguration(ctx context.Context, req *master_pb.GetMasterConfigurationRequest) (*master_pb.GetMasterConfigurationResponse, error) {
 
 	// tell the volume servers about the leader

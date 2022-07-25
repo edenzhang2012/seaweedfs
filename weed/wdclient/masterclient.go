@@ -2,9 +2,10 @@ package wdclient
 
 import (
 	"context"
-	"github.com/chrislusf/seaweedfs/weed/stats"
 	"math/rand"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/stats"
 
 	"github.com/chrislusf/seaweedfs/weed/util"
 	"google.golang.org/grpc"
@@ -134,6 +135,7 @@ func (mc *MasterClient) tryAllMasters() {
 	}
 }
 
+//尝试连接master，返回下一个master节点
 func (mc *MasterClient) tryConnectToMaster(master pb.ServerAddress) (nextHintedLeader pb.ServerAddress) {
 	glog.V(1).Infof("%s.%s masterClient Connecting to master %v", mc.FilerGroup, mc.clientType, master)
 	stats.MasterClientConnectCounter.WithLabelValues("total").Inc()

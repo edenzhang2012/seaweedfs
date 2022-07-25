@@ -2,10 +2,11 @@ package topology
 
 import (
 	"context"
-	"github.com/chrislusf/seaweedfs/weed/pb"
 	"io"
 	"sync/atomic"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/pb"
 
 	"google.golang.org/grpc"
 
@@ -16,13 +17,16 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/pb/volume_server_pb"
 )
 
+//检查volume已删除大小占总大小的比例，返回超过阈值的VolumeLocationList
 func (t *Topology) batchVacuumVolumeCheck(grpcDialOption grpc.DialOption, vid needle.VolumeId,
 	locationlist *VolumeLocationList, garbageThreshold float64) (*VolumeLocationList, bool) {
 	ch := make(chan int, locationlist.Length())
 	errCount := int32(0)
+	//检查所有关联volume，副本与EC机制
 	for index, dn := range locationlist.list {
 		go func(index int, url pb.ServerAddress, vid needle.VolumeId) {
 			err := operation.WithVolumeServerClient(false, url, grpcDialOption, func(volumeServerClient volume_server_pb.VolumeServerClient) error {
+				//调用volume server的RPC接口，获取已删除文件总大小占volume总大小的百分比
 				resp, err := volumeServerClient.VacuumVolumeCheck(context.Background(), &volume_server_pb.VacuumVolumeCheckRequest{
 					VolumeId: uint32(vid),
 				})
@@ -31,6 +35,7 @@ func (t *Topology) batchVacuumVolumeCheck(grpcDialOption grpc.DialOption, vid ne
 					ch <- -1
 					return err
 				}
+				//如果达到vacuum的阈值，发送信号
 				if resp.GarbageRatio >= garbageThreshold {
 					ch <- index
 				} else {
@@ -61,17 +66,25 @@ func (t *Topology) batchVacuumVolumeCheck(grpcDialOption grpc.DialOption, vid ne
 	return vacuumLocationList, errCount == 0 && len(vacuumLocationList.list) > 0
 }
 
+//批量压缩相关联的所有volume，平均每个volume 3min时间，超过volumes *3min则认为失败
+//压缩操作的实质是建立新的idx文件和dat文件，将旧的dat文件和idx文件迁移过去，迁移的过程中会剔除掉已经被删除或者过期的块
 func (t *Topology) batchVacuumVolumeCompact(grpcDialOption grpc.DialOption, vl *VolumeLayout, vid needle.VolumeId,
 	locationlist *VolumeLocationList, preallocate int64) bool {
 	vl.accessLock.Lock()
+	//TODO 需要vacuum的volume先置为不可写，该不可写的意思是新的数据不会被写到这个volume上，但旧的数据可以修改（猜测，需要后面确认）
 	vl.removeFromWritable(vid)
 	vl.accessLock.Unlock()
 
 	ch := make(chan bool, locationlist.Length())
+	//针对多个副本，或者多个EC分片
 	for index, dn := range locationlist.list {
 		go func(index int, url pb.ServerAddress, vid needle.VolumeId) {
 			glog.V(0).Infoln(index, "Start vacuuming", vid, "on", url)
 			err := operation.WithVolumeServerClient(true, url, grpcDialOption, func(volumeServerClient volume_server_pb.VolumeServerClient) error {
+				/*
+					向volume server发送compact请求，压缩volume：
+					本质是建立新的volume文件，将旧的volume文件迁移到新的volume文件，迁移的过程中去掉已经被删除的块。此时新旧volume还同时存在
+				*/
 				stream, err := volumeServerClient.VacuumVolumeCompact(context.Background(), &volume_server_pb.VacuumVolumeCompactRequest{
 					VolumeId:    uint32(vid),
 					Preallocate: preallocate,
@@ -80,6 +93,7 @@ func (t *Topology) batchVacuumVolumeCompact(grpcDialOption grpc.DialOption, vl *
 					return err
 				}
 
+				//进度展示
 				for {
 					resp, recvErr := stream.Recv()
 					if recvErr != nil {
@@ -104,6 +118,7 @@ func (t *Topology) batchVacuumVolumeCompact(grpcDialOption grpc.DialOption, vl *
 	}
 	isVacuumSuccess := true
 
+	//平均每个volume 3min时间，超时则认为失败
 	waitTimeout := time.NewTimer(3 * time.Minute * time.Duration(t.volumeSizeLimit/1024/1024/1000+1))
 	defer waitTimeout.Stop()
 
@@ -118,12 +133,16 @@ func (t *Topology) batchVacuumVolumeCompact(grpcDialOption grpc.DialOption, vl *
 	return isVacuumSuccess
 }
 
+//接着compact步骤之后，最后检查是否旧的volume数据内有新的提交，若有，同步到新的volume数据内，同时删除旧的volume数据，同时将新的volume管理数据加载进内存
+//最后将所有volume置为可写状态
 func (t *Topology) batchVacuumVolumeCommit(grpcDialOption grpc.DialOption, vl *VolumeLayout, vid needle.VolumeId, locationlist *VolumeLocationList) bool {
 	isCommitSuccess := true
 	isReadOnly := false
+	//遍历所有关联的volume（多副本或者EC）
 	for _, dn := range locationlist.list {
 		glog.V(0).Infoln("Start Committing vacuum", vid, "on", dn.Url())
 		err := operation.WithVolumeServerClient(false, dn.ServerAddress(), grpcDialOption, func(volumeServerClient volume_server_pb.VolumeServerClient) error {
+			//发送请求到对应的volume server，最后检查是否旧的volume数据内有新的提交，若有，同步到新的volume数据内，同时删除旧的volume数据，同时将新的volume管理数据加载进内存
 			resp, err := volumeServerClient.VacuumVolumeCommit(context.Background(), &volume_server_pb.VacuumVolumeCommitRequest{
 				VolumeId: uint32(vid),
 			})
@@ -147,10 +166,12 @@ func (t *Topology) batchVacuumVolumeCommit(grpcDialOption grpc.DialOption, vl *V
 	return isCommitSuccess
 }
 
+//compact失败，清理临时文件，等待下一次compact
 func (t *Topology) batchVacuumVolumeCleanup(grpcDialOption grpc.DialOption, vl *VolumeLayout, vid needle.VolumeId, locationlist *VolumeLocationList) {
 	for _, dn := range locationlist.list {
 		glog.V(0).Infoln("Start cleaning up", vid, "on", dn.Url())
 		err := operation.WithVolumeServerClient(false, dn.ServerAddress(), grpcDialOption, func(volumeServerClient volume_server_pb.VolumeServerClient) error {
+			//发送请求到volume server
 			_, err := volumeServerClient.VacuumVolumeCleanup(context.Background(), &volume_server_pb.VacuumVolumeCleanupRequest{
 				VolumeId: uint32(vid),
 			})
@@ -164,6 +185,7 @@ func (t *Topology) batchVacuumVolumeCleanup(grpcDialOption grpc.DialOption, vl *
 	}
 }
 
+//对volume中已经删除的数据进行清理
 func (t *Topology) Vacuum(grpcDialOption grpc.DialOption, garbageThreshold float64, volumeId uint32, collection string, preallocate int64) {
 
 	// if there is vacuum going on, return immediately
@@ -178,12 +200,14 @@ func (t *Topology) Vacuum(grpcDialOption grpc.DialOption, garbageThreshold float
 	glog.V(1).Infof("Start vacuum on demand with threshold: %f collection: %s volumeId: %d",
 		garbageThreshold, collection, volumeId)
 	for _, col := range t.collectionMap.Items() {
+		//get collection
 		c := col.(*Collection)
 		if collection != "" && collection != c.Name {
 			continue
 		}
 		for _, vl := range c.storageType2VolumeLayout.Items() {
 			if vl != nil {
+				//get volume layout
 				volumeLayout := vl.(*VolumeLayout)
 				if volumeId > 0 {
 					if volumeLayout.Lookup(needle.VolumeId(volumeId)) != nil {

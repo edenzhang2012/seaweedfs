@@ -11,6 +11,7 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/wdclient"
 )
 
+//向master获取vid位置信息
 func LookupByMasterClientFn(masterClient *wdclient.MasterClient) func(vids []string) (map[string]*operation.LookupResult, error) {
 	return func(vids []string) (map[string]*operation.LookupResult, error) {
 		m := make(map[string]*operation.LookupResult)
@@ -41,9 +42,12 @@ func (f *Filer) loopProcessingDeletion() {
 	var deletionCount int
 	for {
 		deletionCount = 0
+		//消费fileIdDeletionQueue队列中的元素
 		f.fileIdDeletionQueue.Consume(func(fileIds []string) {
+			//匿名函数：
 			for len(fileIds) > 0 {
 				var toDeleteFileIds []string
+				//每批次最多执行DeletionBatchSize个，超出的部分截断
 				if len(fileIds) > DeletionBatchSize {
 					toDeleteFileIds = fileIds[:DeletionBatchSize]
 					fileIds = fileIds[DeletionBatchSize:]
@@ -63,6 +67,7 @@ func (f *Filer) loopProcessingDeletion() {
 			}
 		})
 
+		//如果没有需要删除的请求，sleep 1123ms重新检查一次
 		if deletionCount == 0 {
 			time.Sleep(1123 * time.Millisecond)
 		}

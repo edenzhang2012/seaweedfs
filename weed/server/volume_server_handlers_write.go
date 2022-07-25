@@ -16,8 +16,9 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/topology"
 )
 
+//处理post请求
 func (vs *VolumeServer) PostHandler(w http.ResponseWriter, r *http.Request) {
-
+	//Prometheus相关
 	stats.VolumeServerRequestCounter.WithLabelValues("post").Inc()
 	start := time.Now()
 	defer func() {
@@ -38,14 +39,17 @@ func (vs *VolumeServer) PostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//鉴权
 	if !vs.maybeCheckJwtAuthorization(r, vid, fid, true) {
 		writeJsonError(w, r, http.StatusUnauthorized, errors.New("wrong jwt"))
 		return
 	}
 
+	//获取临时内存
 	bytesBuffer := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(bytesBuffer)
 
+	//从请求中获取数据
 	reqNeedle, originalSize, contentMd5, ne := needle.CreateNeedleFromRequest(r, vs.FixJpgOrientation, vs.fileSizeLimitBytes, bytesBuffer)
 	if ne != nil {
 		writeJsonError(w, r, http.StatusBadRequest, ne)

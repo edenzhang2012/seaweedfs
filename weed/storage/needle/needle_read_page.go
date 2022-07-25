@@ -2,11 +2,12 @@ package needle
 
 import (
 	"fmt"
+	"io"
+
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/storage/backend"
 	. "github.com/chrislusf/seaweedfs/weed/storage/types"
 	"github.com/chrislusf/seaweedfs/weed/util"
-	"io"
 )
 
 // ReadNeedleDataInto uses a needle without n.Data to read the content into an io.Writer
@@ -69,6 +70,7 @@ func (n *Needle) ReadNeedleMeta(r backend.BackendStorageFile, offset int64, size
 		return err
 	}
 	n.ParseNeedleHeader(bytes)
+	//容量检查
 	if n.Size != size {
 		if OffsetSize == 4 && offset < int64(MaxPossibleVolumeSize) {
 			return ErrorSizeMismatch

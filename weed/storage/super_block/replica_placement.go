@@ -6,11 +6,12 @@ import (
 )
 
 type ReplicaPlacement struct {
-	SameRackCount       int `json:"node,omitempty"`
-	DiffRackCount       int `json:"rack,omitempty"`
-	DiffDataCenterCount int `json:"dc,omitempty"`
+	SameRackCount       int `json:"node,omitempty"` //同rack副本数
+	DiffRackCount       int `json:"rack,omitempty"` //不同rack副本数
+	DiffDataCenterCount int `json:"dc,omitempty"`   //不同dc副本数
 }
 
+//解析ReplicaPlacement字符串
 func NewReplicaPlacementFromString(t string) (*ReplicaPlacement, error) {
 	rp := &ReplicaPlacement{}
 	for i, c := range t {

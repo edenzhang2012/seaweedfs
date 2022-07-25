@@ -2,12 +2,13 @@ package meta_cache
 
 import (
 	"context"
+	"os"
+
 	"github.com/chrislusf/seaweedfs/weed/filer"
 	"github.com/chrislusf/seaweedfs/weed/filer/leveldb"
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/pb/filer_pb"
 	"github.com/chrislusf/seaweedfs/weed/util"
-	"os"
 )
 
 // need to have logic similar to FilerStoreWrapper
@@ -24,7 +25,8 @@ type MetaCache struct {
 }
 
 func NewMetaCache(dbFolder string, uidGidMapper *UidGidMapper, root util.FullPath,
-	markCachedFn func(path util.FullPath), isCachedFn func(path util.FullPath) bool, invalidateFunc func(util.FullPath, *filer_pb.Entry)) *MetaCache {
+	markCachedFn func(path util.FullPath), isCachedFn func(path util.FullPath) bool,
+	invalidateFunc func(util.FullPath, *filer_pb.Entry)) *MetaCache {
 	return &MetaCache{
 		root:         root,
 		localStore:   openMetaStore(dbFolder),
@@ -70,18 +72,22 @@ func (mc *MetaCache) AtomicUpdateEntryFromFiler(ctx context.Context, oldPath uti
 	//defer mc.Unlock()
 
 	oldDir, _ := oldPath.DirAndName()
+	//判断oldpath的上一级目录是否被缓存
 	if mc.isCachedFn(util.FullPath(oldDir)) {
 		if oldPath != "" {
+			//新文件跟旧文件是同一个名称，删除之后又重新创建新的同名文件？？？
 			if newEntry != nil && oldPath == newEntry.FullPath {
 				// skip the unnecessary deletion
 				// leave the update to the following InsertEntry operation
 			} else {
 				glog.V(3).Infof("DeleteEntry %s", oldPath)
 				if shouldDeleteChunks {
+					//删除Metacache中的老的缓存记录，如果存在hardlink同时删除hardlink信息
 					if err := mc.localStore.DeleteEntry(ctx, oldPath); err != nil {
 						return err
 					}
 				} else {
+					//删除Metacache中的老的缓存记录，不删除hardlink
 					if err := mc.localStore.DeleteOneEntrySkipHardlink(ctx, oldPath); err != nil {
 						return err
 					}
@@ -94,8 +100,10 @@ func (mc *MetaCache) AtomicUpdateEntryFromFiler(ctx context.Context, oldPath uti
 
 	if newEntry != nil {
 		newDir, _ := newEntry.DirAndName()
+		//新文件的上级目录已经被缓存
 		if mc.isCachedFn(util.FullPath(newDir)) {
 			glog.V(3).Infof("InsertEntry %s/%s", newDir, newEntry.Name())
+			//向metacache中插入新的entry
 			if err := mc.localStore.InsertEntry(ctx, newEntry); err != nil {
 				return err
 			}

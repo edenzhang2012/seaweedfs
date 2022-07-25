@@ -1,14 +1,18 @@
 package needle
 
+/*
+needle 数据异步落盘
+*/
+
 type AsyncRequest struct {
-	N              *Needle
-	IsWriteRequest bool
-	ActualSize     int64
-	offset         uint64
-	size           uint64
-	doneChan       chan interface{}
-	isUnchanged    bool
-	err            error
+	N              *Needle          //needle数据
+	IsWriteRequest bool             //是否是写请求
+	ActualSize     int64            //实际大小
+	offset         uint64           //偏移量
+	size           uint64           //大小
+	doneChan       chan interface{} //完成通道
+	isUnchanged    bool             //是否未改变
+	err            error            //错误
 }
 
 func NewAsyncRequest(n *Needle, isWriteRequest bool) *AsyncRequest {

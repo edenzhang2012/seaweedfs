@@ -13,6 +13,7 @@ func (v *Volume) GetVolumeInfo() *volume_server_pb.VolumeInfo {
 	return v.volumeInfo
 }
 
+// 加载”.vif“文件信息，填充v.volumeInfo，即使没有也会创建出来
 func (v *Volume) maybeLoadVolumeInfo() (found bool) {
 
 	var err error

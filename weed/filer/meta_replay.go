@@ -8,10 +8,12 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/util"
 )
 
+//事件回放
 func Replay(filerStore FilerStore, resp *filer_pb.SubscribeMetadataResponse) error {
 	message := resp.EventNotification
 	var oldPath util.FullPath
 	var newEntry *Entry
+	//delete old entry
 	if message.OldEntry != nil {
 		oldPath = util.NewFullPath(resp.Directory, message.OldEntry.Name)
 		glog.V(4).Infof("deleting %v", oldPath)
@@ -20,6 +22,7 @@ func Replay(filerStore FilerStore, resp *filer_pb.SubscribeMetadataResponse) err
 		}
 	}
 
+	//create new entry
 	if message.NewEntry != nil {
 		dir := resp.Directory
 		if message.NewParentPath != "" {

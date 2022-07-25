@@ -2,12 +2,13 @@ package command
 
 import (
 	"fmt"
-	"golang.org/x/exp/slices"
 	"net/http"
 	"os"
 	"path"
 	"strings"
 	"time"
+
+	"golang.org/x/exp/slices"
 
 	"github.com/chrislusf/raft/protobuf"
 	stats_collect "github.com/chrislusf/seaweedfs/weed/stats"
@@ -98,11 +99,15 @@ var (
 
 func runMaster(cmd *Command, args []string) bool {
 
+	//从配置文件获取配置信息，存入到全局的配置中心
 	util.LoadConfiguration("security", false)
 	util.LoadConfiguration("master", false)
 
+	//设置CPU和内存profiling
 	grace.SetupProfiling(*masterCpuProfile, *masterMemProfile)
 
+	//path check and create
+	//元数据存储目录检查
 	parent, _ := util.FullPath(*m.metaFolder).DirAndName()
 	if util.FileExists(string(parent)) && !util.FileExists(*m.metaFolder) {
 		os.MkdirAll(*m.metaFolder, 0755)
@@ -115,10 +120,12 @@ func runMaster(cmd *Command, args []string) bool {
 	if *m.whiteList != "" {
 		masterWhiteList = strings.Split(*m.whiteList, ",")
 	}
+	//最大只支持每个volume为30G
 	if *m.volumeSizeLimitMB > util.VolumeSizeLimitGB*1000 {
 		glog.Fatalf("volumeSizeLimitMB should be smaller than 30000")
 	}
 
+	//Prometheus相关
 	go stats_collect.StartMetricsServer(*m.metricsHttpPort)
 	startMaster(m, masterWhiteList)
 
@@ -143,7 +150,9 @@ func startMaster(masterOption MasterOptions, masterWhiteList []string) {
 		masterPeers[string(peer)] = peer
 	}
 
+	//创建一个router实例
 	r := mux.NewRouter()
+	//启动master server服务
 	ms := weed_server.NewMasterServer(r, masterOption.toMasterOption(masterWhiteList), masterPeers)
 	listeningAddress := util.JoinHostPort(*masterOption.ipBind, *masterOption.port)
 	glog.V(0).Infof("Start Seaweed Master %s at %s", util.Version(), listeningAddress)
@@ -182,6 +191,7 @@ func startMaster(masterOption MasterOptions, masterWhiteList []string) {
 	if *m.raftHashicorp {
 		r.HandleFunc("/raft/stats", raftServer.StatsRaftHandler).Methods("GET")
 	}
+
 	// starting grpc server
 	grpcPort := *masterOption.portGrpc
 	grpcL, grpcLocalL, err := util.NewIpAndLocalListeners(*masterOption.ipBind, grpcPort, 0)
@@ -214,6 +224,7 @@ func startMaster(masterOption MasterOptions, masterWhiteList []string) {
 		}()
 	}
 
+	//follower 心跳
 	go ms.MasterClient.KeepConnectedToMaster()
 
 	// start http server
@@ -251,9 +262,11 @@ func startMaster(masterOption MasterOptions, masterWhiteList []string) {
 		go httpS.Serve(masterListener)
 	}
 
+	//阻塞
 	select {}
 }
 
+//检查总的master个数必须是奇数个
 func checkPeers(masterIp string, masterPort int, masterGrpcPort int, peers string) (masterAddress pb.ServerAddress, cleanedPeers []pb.ServerAddress) {
 	glog.V(0).Infof("current: %s:%d peers:%s", masterIp, masterPort, peers)
 	masterAddress = pb.NewServerAddress(masterIp, masterPort, masterGrpcPort)

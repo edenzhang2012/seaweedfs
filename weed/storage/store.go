@@ -28,9 +28,9 @@ const (
 
 type ReadOption struct {
 	// request
-	ReadDeleted     bool
-	AttemptMetaOnly bool
-	MustMetaOnly    bool
+	ReadDeleted     bool //是否读取已经被删除的数据
+	AttemptMetaOnly bool //尝试只读取元数据
+	MustMetaOnly    bool //只读取元数据，暂未使用
 	// response
 	IsMetaOnly     bool // read status
 	VolumeRevision uint16
@@ -41,23 +41,23 @@ type ReadOption struct {
  * A VolumeServer contains one Store
  */
 type Store struct {
-	MasterAddress       pb.ServerAddress
-	grpcDialOption      grpc.DialOption
-	volumeSizeLimit     uint64 // read from the master
-	Ip                  string
-	Port                int
-	GrpcPort            int
-	PublicUrl           string
-	Locations           []*DiskLocation
-	dataCenter          string // optional informaton, overwriting master setting if exists
-	rack                string // optional information, overwriting master setting if exists
-	connected           bool
-	NeedleMapKind       NeedleMapKind
-	NewVolumesChan      chan master_pb.VolumeShortInformationMessage
-	DeletedVolumesChan  chan master_pb.VolumeShortInformationMessage
-	NewEcShardsChan     chan master_pb.VolumeEcShardInformationMessage
-	DeletedEcShardsChan chan master_pb.VolumeEcShardInformationMessage
-	isStopping          bool
+	MasterAddress       pb.ServerAddress                               // master server address
+	grpcDialOption      grpc.DialOption                                // grpc dial option
+	volumeSizeLimit     uint64                                         // read from the master
+	Ip                  string                                         //volume server IP地址
+	Port                int                                            //volume server 端口
+	GrpcPort            int                                            //volume server grpc端口
+	PublicUrl           string                                         //volume server 公共地址
+	Locations           []*DiskLocation                                //volume server 所有的目录
+	dataCenter          string                                         // optional informaton, overwriting master setting if exists
+	rack                string                                         // optional information, overwriting master setting if exists
+	connected           bool                                           //是否连接上master
+	NeedleMapKind       NeedleMapKind                                  //needle map的类型
+	NewVolumesChan      chan master_pb.VolumeShortInformationMessage   //新的volume信息
+	DeletedVolumesChan  chan master_pb.VolumeShortInformationMessage   //删除的volume信息
+	NewEcShardsChan     chan master_pb.VolumeEcShardInformationMessage //新的ec shard信息
+	DeletedEcShardsChan chan master_pb.VolumeEcShardInformationMessage //删除的ec shard信息
+	isStopping          bool                                           //stop 状态
 }
 
 func (s *Store) String() (str string) {
@@ -65,6 +65,7 @@ func (s *Store) String() (str string) {
 	return
 }
 
+// a volume server 可以管理多个目录下的多个volumes,一般每个节点上存在一个
 func NewStore(grpcDialOption grpc.DialOption, ip string, port int, grpcPort int, publicUrl string, dirnames []string, maxVolumeCounts []int,
 	minFreeSpaces []util.MinFreeSpace, idxFolder string, needleMapKind NeedleMapKind, diskTypes []DiskType) (s *Store) {
 	s = &Store{grpcDialOption: grpcDialOption, Port: port, Ip: ip, GrpcPort: grpcPort, PublicUrl: publicUrl, NeedleMapKind: needleMapKind}
@@ -106,6 +107,7 @@ func (s *Store) DeleteCollection(collection string) (e error) {
 	return
 }
 
+// 遍历store存储的数据结构，获取volume信息
 func (s *Store) findVolume(vid needle.VolumeId) *Volume {
 	for _, location := range s.Locations {
 		if v, found := location.FindVolume(vid); found {
@@ -222,16 +224,19 @@ func (s *Store) GetRack() string {
 	return s.rack
 }
 
+// 收集心跳信息
 func (s *Store) CollectHeartbeat() *master_pb.Heartbeat {
 	var volumeMessages []*master_pb.VolumeInformationMessage
 	maxVolumeCounts := make(map[string]uint32)
 	var maxFileKey NeedleId
 	collectionVolumeSize := make(map[string]uint64)
 	collectionVolumeReadOnlyCount := make(map[string]map[string]uint8)
+	//遍历所有的locations,每个location是一个dir
 	for _, location := range s.Locations {
 		var deleteVids []needle.VolumeId
 		maxVolumeCounts[string(location.DiskType)] += uint32(location.MaxVolumeCount)
 		location.volumesLock.RLock()
+		//遍历每个location下的volume，每个volume是一个单独的dir
 		for _, v := range location.volumes {
 			curMaxFileKey, volumeMessage := v.ToVolumeInformationMessage()
 			if volumeMessage == nil {
@@ -353,6 +358,7 @@ func (s *Store) Close() {
 	}
 }
 
+// needle信息落盘，local
 func (s *Store) WriteVolumeNeedle(i needle.VolumeId, n *needle.Needle, checkCookie bool, fsync bool) (isUnchanged bool, err error) {
 	if v := s.findVolume(i); v != nil {
 		if v.IsReadOnly() {
@@ -377,6 +383,7 @@ func (s *Store) DeleteVolumeNeedle(i needle.VolumeId, n *needle.Needle) (Size, e
 	return 0, fmt.Errorf("volume %d not found on %s:%d", i, s.Ip, s.Port)
 }
 
+// 从volume的.dat文件读取对应的needle数据
 func (s *Store) ReadVolumeNeedle(i needle.VolumeId, n *needle.Needle, readOption *ReadOption, onReadSizeFn func(size Size)) (int, error) {
 	if v := s.findVolume(i); v != nil {
 		return v.readNeedle(n, readOption, onReadSizeFn)
@@ -530,6 +537,7 @@ func (s *Store) GetVolumeSizeLimit() uint64 {
 	return atomic.LoadUint64(&s.volumeSizeLimit)
 }
 
+// 当volume大小变化的时候，根据容量设置的最大volume个数会发生变化，volume最大大小变大，则最大volume个数可能会减小
 func (s *Store) MaybeAdjustVolumeMax() (hasChanges bool) {
 	volumeSizeLimit := s.GetVolumeSizeLimit()
 	if volumeSizeLimit == 0 {

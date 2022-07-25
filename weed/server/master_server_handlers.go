@@ -2,10 +2,11 @@ package weed_server
 
 import (
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/glog"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/chrislusf/seaweedfs/weed/glog"
 
 	"github.com/chrislusf/seaweedfs/weed/operation"
 	"github.com/chrislusf/seaweedfs/weed/security"
@@ -14,6 +15,7 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/topology"
 )
 
+//
 func (ms *MasterServer) lookupVolumeId(vids []string, collection string) (volumeLocations map[string]operation.LookupResult) {
 	volumeLocations = make(map[string]operation.LookupResult)
 	for _, vid := range vids {
@@ -96,6 +98,7 @@ func (ms *MasterServer) findVolumeLocation(collection, vid string) operation.Loo
 }
 
 func (ms *MasterServer) dirAssignHandler(w http.ResponseWriter, r *http.Request) {
+	//记录assign请求
 	stats.AssignRequest()
 	requestedCount, e := strconv.ParseUint(r.FormValue("count"), 10, 64)
 	if e != nil || requestedCount == 0 {
@@ -107,14 +110,17 @@ func (ms *MasterServer) dirAssignHandler(w http.ResponseWriter, r *http.Request)
 		writableVolumeCount = 0
 	}
 
+	//传参解析
 	option, err := ms.getVolumeGrowOption(r)
 	if err != nil {
 		writeJsonQuiet(w, r, http.StatusNotAcceptable, operation.AssignResult{Error: err.Error()})
 		return
 	}
 
+	//根据collection参数获取对应的VolumeLayout
 	vl := ms.Topo.GetVolumeLayout(option.Collection, option.ReplicaPlacement, option.Ttl, option.DiskType)
 
+	//当前没有GrowRequest且需要grow
 	if !vl.HasGrowRequest() && vl.ShouldGrowVolumes(option) {
 		glog.V(0).Infof("dirAssign volume growth %v from %v", option.String(), r.RemoteAddr)
 		if ms.Topo.AvailableSpaceFor(option) <= 0 {
@@ -123,16 +129,20 @@ func (ms *MasterServer) dirAssignHandler(w http.ResponseWriter, r *http.Request)
 		}
 		errCh := make(chan error, 1)
 		vl.AddGrowRequest()
+		//发送volume grow请求
 		ms.vgCh <- &topology.VolumeGrowRequest{
 			Option: option,
 			Count:  writableVolumeCount,
 			ErrCh:  errCh,
 		}
+		//等待volume grow请求处理完成
 		if err := <-errCh; err != nil {
 			writeJsonError(w, r, http.StatusInternalServerError, fmt.Errorf("cannot grow volume group! %v", err))
 			return
 		}
 	}
+
+	//选择一个volume并返回fid和连接信息等
 	fid, count, dnList, err := ms.Topo.PickForWrite(requestedCount, option)
 	if err == nil {
 		ms.maybeAddJwtAuthorization(w, fid, true)

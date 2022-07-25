@@ -56,6 +56,7 @@ func NewLogBuffer(name string, flushInterval time.Duration, flushFn func(startTi
 	return lb
 }
 
+//将data数据添加到buffer内存结构中
 func (m *LogBuffer) AddToBuffer(partitionKey, data []byte, processingTsNs int64) {
 
 	var toFlush *dataToFlush
@@ -159,6 +160,7 @@ func (m *LogBuffer) loopInterval() {
 	}
 }
 
+//
 func (m *LogBuffer) copyToFlush() *dataToFlush {
 
 	if m.pos > 0 {

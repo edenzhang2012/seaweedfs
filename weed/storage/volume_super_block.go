@@ -17,6 +17,7 @@ func (v *Volume) maybeWriteSuperBlock() error {
 		glog.V(0).Infof("failed to stat datafile %s: %v", v.DataBackend.Name(), e)
 		return e
 	}
+	//如果dat文件大小为0，说明superblock未写入，将superblock写入dat文件
 	if datSize == 0 {
 		v.SuperBlock.Version = needle.CurrentVersion
 		_, e = v.DataBackend.WriteAt(v.SuperBlock.Bytes(), 0)

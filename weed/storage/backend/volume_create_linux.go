@@ -10,6 +10,7 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/glog"
 )
 
+//创建volume文件，如果指定了prealloc会直接分配空间
 func CreateVolumeFile(fileName string, preallocate int64, memoryMapSizeMB uint32) (BackendStorageFile, error) {
 	file, e := os.OpenFile(fileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if e != nil {

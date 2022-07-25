@@ -1,10 +1,11 @@
 package backend
 
 import (
-	"github.com/chrislusf/seaweedfs/weed/glog"
-	. "github.com/chrislusf/seaweedfs/weed/storage/types"
 	"os"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/glog"
+	. "github.com/chrislusf/seaweedfs/weed/storage/types"
 )
 
 var (
@@ -23,6 +24,7 @@ func NewDiskFile(f *os.File) *DiskFile {
 	if err != nil {
 		glog.Fatalf("stat file %s: %v", f.Name(), err)
 	}
+	//对齐
 	offset := stat.Size()
 	if offset%NeedlePaddingSize != 0 {
 		offset = offset + (NeedlePaddingSize - offset%NeedlePaddingSize)

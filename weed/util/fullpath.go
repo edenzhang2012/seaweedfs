@@ -11,6 +11,7 @@ func NewFullPath(dir, name string) FullPath {
 	return FullPath(dir).Child(name)
 }
 
+//将fp切分为目录+文件的形式，如：/tmp->/ tmp; tmp/->tmp/
 func (fp FullPath) DirAndName() (string, string) {
 	dir, name := filepath.Split(string(fp))
 	name = strings.ToValidUTF8(name, "?")

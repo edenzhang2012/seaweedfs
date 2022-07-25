@@ -17,22 +17,27 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/util"
 )
 
+/*
+将upload参数转化为needle数据信息
+*/
+
 type ParsedUpload struct {
-	FileName    string
-	Data        []byte
-	bytesBuffer *bytes.Buffer
+	FileName    string        //文件名
+	Data        []byte        //实际的数据，包含所有数据
+	bytesBuffer *bytes.Buffer //数据缓存，暂存每一个part的数据
 	MimeType    string
 	PairMap     map[string]string
 	IsGzipped   bool
 	// IsZstd           bool
-	OriginalDataSize int
+	OriginalDataSize int //原始数据大小
 	ModifiedTime     uint64
 	Ttl              *TTL
 	IsChunkedFile    bool
-	UncompressedData []byte
-	ContentMd5       string
+	UncompressedData []byte //未压缩的数据
+	ContentMd5       string //MD5字符串
 }
 
+//解析上传数据
 func ParseUpload(r *http.Request, sizeLimit int64, bytesBuffer *bytes.Buffer) (pu *ParsedUpload, e error) {
 	bytesBuffer.Reset()
 	pu = &ParsedUpload{bytesBuffer: bytesBuffer}
@@ -58,7 +63,7 @@ func ParseUpload(r *http.Request, sizeLimit int64, bytesBuffer *bytes.Buffer) (p
 	pu.OriginalDataSize = len(pu.Data)
 	pu.UncompressedData = pu.Data
 	// println("received data", len(pu.Data), "isGzipped", pu.IsGzipped, "mime", pu.MimeType, "name", pu.FileName)
-	if pu.IsGzipped {
+	if pu.IsGzipped { //数据被压缩，解压
 		if unzipped, e := util.DecompressData(pu.Data); e == nil {
 			pu.OriginalDataSize = len(unzipped)
 			pu.UncompressedData = unzipped
@@ -116,6 +121,7 @@ func parsePut(r *http.Request, sizeLimit int64, pu *ParsedUpload) error {
 
 func parseMultipart(r *http.Request, sizeLimit int64, pu *ParsedUpload) (e error) {
 	defer func() {
+		//处理出错，将body内容全部读出并丢弃，然后关闭body
 		if e != nil && r.Body != nil {
 			io.Copy(io.Discard, r.Body)
 			r.Body.Close()

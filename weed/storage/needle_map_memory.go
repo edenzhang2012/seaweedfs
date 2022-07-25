@@ -27,6 +27,7 @@ func NewCompactNeedleMap(file *os.File) *NeedleMap {
 	return nm
 }
 
+//从”idx“文件加载NeedleMap
 func LoadCompactNeedleMap(file *os.File) (*NeedleMap, error) {
 	nm := NewCompactNeedleMap(file)
 	return doLoading(file, nm)

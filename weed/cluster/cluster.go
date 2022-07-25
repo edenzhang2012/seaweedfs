@@ -1,11 +1,12 @@
 package cluster
 
 import (
-	"github.com/chrislusf/seaweedfs/weed/pb"
-	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 	"math"
 	"sync"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/pb"
+	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 )
 
 const (
@@ -57,17 +58,21 @@ func (cluster *Cluster) getFilers(filerGroup FilerGroup, createIfNotFound bool) 
 	return filers
 }
 
+//cluster node添加事件
 func (cluster *Cluster) AddClusterNode(ns, nodeType string, address pb.ServerAddress, version string) []*master_pb.KeepConnectedResponse {
 	filerGroup := FilerGroup(ns)
 	switch nodeType {
+	//filer
 	case FilerType:
 		cluster.filersLock.Lock()
 		defer cluster.filersLock.Unlock()
 		filers := cluster.getFilers(filerGroup, true)
+		//if exist
 		if existingNode, found := filers.filers[address]; found {
 			existingNode.counter++
 			return nil
 		}
+		//添加当前地址到filers中
 		filers.filers[address] = &ClusterNode{
 			Address:   address,
 			Version:   version,
@@ -111,6 +116,7 @@ func (cluster *Cluster) AddClusterNode(ns, nodeType string, address pb.ServerAdd
 	return nil
 }
 
+//移除clusternode
 func (cluster *Cluster) RemoveClusterNode(ns string, nodeType string, address pb.ServerAddress) []*master_pb.KeepConnectedResponse {
 	filerGroup := FilerGroup(ns)
 	switch nodeType {
@@ -195,9 +201,10 @@ func (cluster *Cluster) IsOneLeader(filerGroup FilerGroup, address pb.ServerAddr
 	return filers.leaders.isOneLeader(address)
 }
 
+//确认filer leader操作，据事件类型组合response
 func (cluster *Cluster) ensureFilerLeaders(filers *Filers, isAdd bool, filerGroup FilerGroup, nodeType string, address pb.ServerAddress) (result []*master_pb.KeepConnectedResponse) {
 	if isAdd {
-		if filers.leaders.addLeaderIfVacant(address) {
+		if filers.leaders.addLeaderIfVacant(address) { //add address to leaders
 			// has added the address as one leader
 			result = append(result, &master_pb.KeepConnectedResponse{
 				ClusterNodeUpdate: &master_pb.ClusterNodeUpdate{
@@ -236,6 +243,7 @@ func (cluster *Cluster) ensureFilerLeaders(filers *Filers, isAdd bool, filerGrou
 			var shortestDuration int64 = math.MaxInt64
 			now := time.Now()
 			var candidateAddress pb.ServerAddress
+			//找到时间间隔最短的节点最为新的leader
 			for _, node := range filers.filers {
 				if filers.leaders.isOneLeader(node.Address) {
 					continue
@@ -258,7 +266,7 @@ func (cluster *Cluster) ensureFilerLeaders(filers *Filers, isAdd bool, filerGrou
 					},
 				})
 			}
-		} else {
+		} else { //非leader
 			result = append(result, &master_pb.KeepConnectedResponse{
 				ClusterNodeUpdate: &master_pb.ClusterNodeUpdate{
 					FilerGroup: string(filerGroup),
@@ -273,6 +281,7 @@ func (cluster *Cluster) ensureFilerLeaders(filers *Filers, isAdd bool, filerGrou
 	return
 }
 
+//存在空位时将address加入leader
 func (leaders *Leaders) addLeaderIfVacant(address pb.ServerAddress) (hasChanged bool) {
 	if leaders.isOneLeader(address) {
 		return

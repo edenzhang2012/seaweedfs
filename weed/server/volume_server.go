@@ -21,26 +21,26 @@ import (
 
 type VolumeServer struct {
 	volume_server_pb.UnimplementedVolumeServerServer
-	inFlightUploadDataSize        int64
-	inFlightDownloadDataSize      int64
-	concurrentUploadLimit         int64
-	concurrentDownloadLimit       int64
-	inFlightUploadDataLimitCond   *sync.Cond
-	inFlightDownloadDataLimitCond *sync.Cond
-	inflightUploadDataTimeout     time.Duration
+	inFlightUploadDataSize        int64         //正在上传数据量
+	inFlightDownloadDataSize      int64         //正在下载数据量
+	concurrentUploadLimit         int64         //并发上传数据量上限
+	concurrentDownloadLimit       int64         //并发下载数据量上限
+	inFlightUploadDataLimitCond   *sync.Cond    //上传限制通知
+	inFlightDownloadDataLimitCond *sync.Cond    //下载限制通知
+	inflightUploadDataTimeout     time.Duration //上传数据超时
 
 	SeedMasterNodes []pb.ServerAddress
 	currentMaster   pb.ServerAddress
 	pulseSeconds    int
 	dataCenter      string
 	rack            string
-	store           *storage.Store
+	store           *storage.Store //后端存储
 	guard           *security.Guard
 	grpcDialOption  grpc.DialOption
 
 	needleMapKind           storage.NeedleMapKind
 	FixJpgOrientation       bool
-	ReadMode                string
+	ReadMode                string //local ，proxy or redirect
 	compactionBytePerSecond int64
 	metricsAddress          string
 	metricsIntervalSec      int
@@ -98,6 +98,7 @@ func NewVolumeServer(adminMux, publicMux *http.ServeMux, ip string,
 
 	vs.checkWithMaster()
 
+	//建立VolumeServer -> Store(1:1) -> DiskLocation(1:n) -> Volume(1:n)
 	vs.store = storage.NewStore(vs.grpcDialOption, ip, port, grpcPort, publicUrl, folders, maxCounts, minFreeSpaces, idxFolder, vs.needleMapKind, diskTypes)
 	vs.guard = security.NewGuard(whiteList, signingKey, expiresAfterSec, readSigningKey, readExpiresAfterSec)
 

@@ -3,10 +3,11 @@ package command
 import (
 	"context"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/s3api/s3err"
-	"google.golang.org/grpc/reflection"
 	"net/http"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/s3api/s3err"
+	"google.golang.org/grpc/reflection"
 
 	"github.com/chrislusf/seaweedfs/weed/pb"
 	"github.com/chrislusf/seaweedfs/weed/pb/filer_pb"
@@ -147,6 +148,7 @@ func runS3(cmd *Command, args []string) bool {
 
 }
 
+//提供S3访问接口，like minio
 func (s3opt *S3Options) startS3Server() bool {
 
 	filerAddress := pb.ServerAddress(*s3opt.filer)

@@ -39,9 +39,11 @@ func (vs *VolumeServer) privateStoreHandler(w http.ResponseWriter, r *http.Reque
 	switch r.Method {
 	case "GET", "HEAD":
 		stats.ReadRequest()
+		//下载限流设置
 		vs.inFlightDownloadDataLimitCond.L.Lock()
 		for vs.concurrentDownloadLimit != 0 && atomic.LoadInt64(&vs.inFlightDownloadDataSize) > vs.concurrentDownloadLimit {
 			select {
+			//http连接中断
 			case <-r.Context().Done():
 				glog.V(4).Infof("request cancelled from %s: %v", r.RemoteAddr, r.Context().Err())
 				return
@@ -59,6 +61,8 @@ func (vs *VolumeServer) privateStoreHandler(w http.ResponseWriter, r *http.Reque
 
 		contentLength := getContentLength(r)
 		// exclude the replication from the concurrentUploadLimitMB
+		//若请求被标记为重复数据，且并发上传数据量不为0，则检查
+		//拥塞控制
 		if r.URL.Query().Get("type") != "replicate" && vs.concurrentUploadLimit != 0 {
 			startTime := time.Now()
 			vs.inFlightUploadDataLimitCond.L.Lock()
@@ -130,6 +134,7 @@ func (vs *VolumeServer) publicReadOnlyHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// 权限检查
 func (vs *VolumeServer) maybeCheckJwtAuthorization(r *http.Request, vid, fid string, isWrite bool) bool {
 
 	var signingKey security.SigningKey

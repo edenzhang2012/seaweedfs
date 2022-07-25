@@ -3,9 +3,10 @@ package mount
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/pb/filer_pb"
-	"time"
 )
 
 func (wfs *WFS) loopCheckQuota() {

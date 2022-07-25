@@ -21,6 +21,7 @@ type MemoryMap struct {
 	End_of_file            int64
 }
 
+//字符串转换为数字
 func ReadMemoryMapMaxSizeMb(memoryMapMaxSizeMbString string) (uint32, error) {
 	if memoryMapMaxSizeMbString == "" {
 		return 0, nil

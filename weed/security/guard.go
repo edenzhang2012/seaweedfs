@@ -50,6 +50,7 @@ type Guard struct {
 	isWriteActive bool
 }
 
+//认证加密权限相关
 func NewGuard(whiteList []string, signingKey string, expiresAfterSec int, readSigningKey string, readExpiresAfterSec int) *Guard {
 	g := &Guard{
 		whiteList:           whiteList,

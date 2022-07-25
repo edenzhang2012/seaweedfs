@@ -22,6 +22,7 @@ func loadVolumeWithoutIndex(dirname string, collection string, id needle.VolumeI
 	return
 }
 
+// 加载volume数据
 func (v *Volume) load(alsoLoadIndex bool, createDatIfMissing bool, needleMapKind NeedleMapKind, preallocate int64) (err error) {
 	alreadyHasSuperBlock := false
 
@@ -101,6 +102,7 @@ func (v *Volume) load(alsoLoadIndex bool, createDatIfMissing bool, needleMapKind
 	if err == nil && alsoLoadIndex {
 		// adjust for existing volumes with .idx together with .dat files
 		if v.dirIdx != v.dir {
+			//默认idx存在于dat所在的目录
 			if util.FileExists(v.DataFileName() + ".idx") {
 				v.dirIdx = v.dir
 			}

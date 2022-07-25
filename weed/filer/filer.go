@@ -3,13 +3,14 @@ package filer
 import (
 	"context"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/cluster"
-	"github.com/chrislusf/seaweedfs/weed/pb"
-	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 	"os"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/cluster"
+	"github.com/chrislusf/seaweedfs/weed/pb"
+	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 
 	"google.golang.org/grpc"
 
@@ -34,7 +35,7 @@ var (
 type Filer struct {
 	Store               VirtualFilerStore
 	MasterClient        *wdclient.MasterClient
-	fileIdDeletionQueue *util.UnboundedQueue
+	fileIdDeletionQueue *util.UnboundedQueue //删除chunks会先入队，队列中每一项是一个filerID
 	GrpcDialOption      grpc.DialOption
 	DirBucketsPath      string
 	Cipher              bool

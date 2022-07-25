@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/pb"
-	"google.golang.org/grpc"
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/chrislusf/seaweedfs/weed/pb"
+	"google.golang.org/grpc"
 
 	"github.com/chrislusf/seaweedfs/weed/pb/volume_server_pb"
 )
@@ -47,12 +48,14 @@ func DeleteFiles(masterFn GetMasterFn, usePublicUrl bool, grpcDialOption grpc.Di
 
 }
 
+//批量删除fileIDs
 func DeleteFilesWithLookupVolumeId(grpcDialOption grpc.DialOption, fileIds []string, lookupFunc func(vid []string) (map[string]*LookupResult, error)) ([]*volume_server_pb.DeleteResult, error) {
 
 	var ret []*volume_server_pb.DeleteResult
 
 	vid_to_fileIds := make(map[string][]string)
 	var vids []string
+	//遍历所有的fileIDs,解析其所属的vid，并将所有属于相同vid的file放到一起
 	for _, fileId := range fileIds {
 		vid, _, err := ParseFileId(fileId)
 		if err != nil {
@@ -70,11 +73,13 @@ func DeleteFilesWithLookupVolumeId(grpcDialOption grpc.DialOption, fileIds []str
 		vid_to_fileIds[vid] = append(vid_to_fileIds[vid], fileId)
 	}
 
+	//获取所有vid的位置信息，根据lookupFunc的不同，获取的是不同区域的vid位置
 	lookupResults, err := lookupFunc(vids)
 	if err != nil {
 		return ret, err
 	}
 
+	//填充每个server需要删除的fileID信息
 	server_to_fileIds := make(map[pb.ServerAddress][]string)
 	for vid, result := range lookupResults {
 		if result.Error != "" {
@@ -95,6 +100,7 @@ func DeleteFilesWithLookupVolumeId(grpcDialOption grpc.DialOption, fileIds []str
 		}
 	}
 
+	//并发删除，每个server一个单独的线程
 	resultChan := make(chan []*volume_server_pb.DeleteResult, len(server_to_fileIds))
 	var wg sync.WaitGroup
 	for server, fidList := range server_to_fileIds {

@@ -3,12 +3,13 @@ package needle
 import (
 	"bytes"
 	"fmt"
+	"math"
+	"sync"
+
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/storage/backend"
 	. "github.com/chrislusf/seaweedfs/weed/storage/types"
 	"github.com/chrislusf/seaweedfs/weed/util"
-	"math"
-	"sync"
 )
 
 var bufPool = sync.Pool{
@@ -112,6 +113,7 @@ func (n *Needle) prepareWriteBuffer(version Version, writeBytes *bytes.Buffer) (
 	return 0, 0, fmt.Errorf("Unsupported Version! (%d)", version)
 }
 
+//将needle中内容写入到BackendStorageFile中
 func (n *Needle) Append(w backend.BackendStorageFile, version Version) (offset uint64, size Size, actualSize int64, err error) {
 
 	if end, _, e := w.GetStat(); e == nil {

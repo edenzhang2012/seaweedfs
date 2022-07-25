@@ -16,6 +16,7 @@ func NewConcurrentReadMap() *ConcurrentReadMap {
 	return &ConcurrentReadMap{items: make(map[string]interface{})}
 }
 
+//不想在参数列表传一大堆参数，则可以通过闭包将参数封装到函数里，通过包装在一起返回值的方式传递
 func (m *ConcurrentReadMap) initMapEntry(key string, newEntry func() interface{}) (value interface{}) {
 	m.Lock()
 	defer m.Unlock()
@@ -27,6 +28,7 @@ func (m *ConcurrentReadMap) initMapEntry(key string, newEntry func() interface{}
 	return value
 }
 
+//如果获取失败，则插入新的key
 func (m *ConcurrentReadMap) Get(key string, newEntry func() interface{}) interface{} {
 	m.RLock()
 	if value, ok := m.items[key]; ok {

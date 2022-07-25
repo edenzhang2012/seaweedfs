@@ -1,9 +1,10 @@
 package util
 
 import (
-	"github.com/chrislusf/seaweedfs/weed/glog"
 	"net"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/glog"
 
 	"github.com/chrislusf/seaweedfs/weed/stats"
 )
@@ -98,6 +99,7 @@ func NewListener(addr string, timeout time.Duration) (ipListner net.Listener, er
 	return
 }
 
+//功能如其名，监听IP+port和“localhost”+port
 func NewIpAndLocalListeners(host string, port int, timeout time.Duration) (ipListner net.Listener, localListener net.Listener, err error) {
 	listner, err := net.Listen("tcp", JoinHostPort(host, port))
 	if err != nil {

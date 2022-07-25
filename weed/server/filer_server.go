@@ -131,6 +131,7 @@ func NewFilerServer(defaultMux, readonlyMux *http.ServeMux, option *FilerOption)
 	fs.checkWithMaster()
 
 	go stats.LoopPushingMetric("filer", string(fs.option.Host), fs.metricsAddress, fs.metricsIntervalSec)
+	//保持与master的连接
 	go fs.filer.KeepMasterClientConnected()
 
 	if !util.LoadConfiguration("filer", false) {
@@ -173,6 +174,7 @@ func NewFilerServer(defaultMux, readonlyMux *http.ServeMux, option *FilerOption)
 			glog.Fatalf("%s bootstrap from %+v", option.Host, existingNodes)
 		}
 	}
+	//filer订阅相关
 	fs.filer.AggregateFromPeers(option.Host, existingNodes, startFromTime)
 
 	fs.filer.LoadFilerConf()
@@ -186,6 +188,7 @@ func NewFilerServer(defaultMux, readonlyMux *http.ServeMux, option *FilerOption)
 	return fs, nil
 }
 
+// 尝试通过master client连接所有master，只要任意一个能连接上就认为连接成功，否则每7S重试更换一个master节点，直到连接成功为止
 func (fs *FilerServer) checkWithMaster() {
 
 	isConnected := false

@@ -19,24 +19,26 @@ import (
 	"github.com/google/uuid"
 )
 
+//volumes根目录管理
 type DiskLocation struct {
-	Directory              string
-	DirectoryUuid          string
-	IdxDirectory           string
-	DiskType               types.DiskType
-	MaxVolumeCount         int
-	OriginalMaxVolumeCount int
-	MinFreeSpace           util.MinFreeSpace
-	volumes                map[needle.VolumeId]*Volume
-	volumesLock            sync.RWMutex
+	Directory              string                      //volumes根目录
+	DirectoryUuid          string                      //volumes根目录的UUID
+	IdxDirectory           string                      //directory to store .idx files
+	DiskType               types.DiskType              //磁盘类型
+	MaxVolumeCount         int                         //最大volume个数
+	OriginalMaxVolumeCount int                         //原始最大volume个数
+	MinFreeSpace           util.MinFreeSpace           //最小剩余空间
+	volumes                map[needle.VolumeId]*Volume //volumeId->Volume
+	volumesLock            sync.RWMutex                //读写锁
 
 	// erasure coding
-	ecVolumes     map[needle.VolumeId]*erasure_coding.EcVolume
-	ecVolumesLock sync.RWMutex
+	ecVolumes     map[needle.VolumeId]*erasure_coding.EcVolume //erasure coding volumeId->EcVolume
+	ecVolumesLock sync.RWMutex                                 //读写锁
 
-	isDiskSpaceLow bool
+	isDiskSpaceLow bool //磁盘空间是否低
 }
 
+//生成随机UUID并写入到文件或从文件中读出UUID
 func GenerateDirUuid(dir string) (dirUuidString string, err error) {
 	glog.V(1).Infof("Getting uuid of volume directory:%s", dir)
 	dirUuidString = ""
@@ -58,6 +60,7 @@ func GenerateDirUuid(dir string) (dirUuidString string, err error) {
 	return dirUuidString, nil
 }
 
+//磁盘目录服务，每个DiskLocation是一个volumes的根目录，其下可以包含多个volumes
 func NewDiskLocation(dir string, maxVolumeCount int, minFreeSpace util.MinFreeSpace, idxDir string, diskType types.DiskType) *DiskLocation {
 	dir = util.ResolvePath(dir)
 	if idxDir == "" {
@@ -107,6 +110,7 @@ func isValidVolume(basename string) bool {
 	return strings.HasSuffix(basename, ".idx") || strings.HasSuffix(basename, ".vif")
 }
 
+//从volume目录中获取有效的volume名,主要靠提取".idx"和".vif"文件名进行
 func getValidVolumeName(basename string) string {
 	if isValidVolume(basename) {
 		return basename[:len(basename)-4]
@@ -114,13 +118,16 @@ func getValidVolumeName(basename string) string {
 	return ""
 }
 
+//从目录中加载已经存在的volumes
 func (l *DiskLocation) loadExistingVolume(dirEntry os.DirEntry, needleMapKind NeedleMapKind, skipIfEcVolumesExists bool) bool {
 	basename := dirEntry.Name()
+	//不能是目录
 	if dirEntry.IsDir() {
 		return false
 	}
 	volumeName := getValidVolumeName(basename)
 	if volumeName == "" {
+		//will never get here
 		return false
 	}
 
@@ -172,9 +179,11 @@ func (l *DiskLocation) loadExistingVolume(dirEntry os.DirEntry, needleMapKind Ne
 	return true
 }
 
+//并发加载volume数据
 func (l *DiskLocation) concurrentLoadingVolumes(needleMapKind NeedleMapKind, concurrency int) {
 
 	task_queue := make(chan os.DirEntry, 10*concurrency)
+	//生产者，遍历目录下的所有可能的volume
 	go func() {
 		foundVolumeNames := make(map[string]bool)
 		if dirEntries, err := os.ReadDir(l.Directory); err == nil {
@@ -195,6 +204,7 @@ func (l *DiskLocation) concurrentLoadingVolumes(needleMapKind NeedleMapKind, con
 	var wg sync.WaitGroup
 	for workerNum := 0; workerNum < concurrency; workerNum++ {
 		wg.Add(1)
+		//消费者，处理单个volume
 		go func() {
 			defer wg.Done()
 			for fi := range task_queue {
@@ -206,8 +216,11 @@ func (l *DiskLocation) concurrentLoadingVolumes(needleMapKind NeedleMapKind, con
 
 }
 
+//启动时检查加载已有的volumes
+//TODO:对于数据已经不一致的卷如何处理
 func (l *DiskLocation) loadExistingVolumes(needleMapKind NeedleMapKind) {
 
+	//默认CPU个线程，如果设置了上限，则设置为10个线程
 	workerNum := runtime.NumCPU()
 	val, ok := os.LookupEnv("GOMAXPROCS")
 	if ok {
@@ -222,9 +235,11 @@ func (l *DiskLocation) loadExistingVolumes(needleMapKind NeedleMapKind) {
 			workerNum = 10
 		}
 	}
+	//并发加载普通volumes
 	l.concurrentLoadingVolumes(needleMapKind, workerNum)
 	glog.V(0).Infof("Store started on dir: %s with %d volumes max %d", l.Directory, len(l.volumes), l.MaxVolumeCount)
 
+	//加载ECshards EC相关，过后细看
 	l.loadAllEcShards()
 	glog.V(0).Infof("Store started on dir: %s with %d ec shards", l.Directory, len(l.ecVolumes))
 
@@ -419,9 +434,11 @@ func (l *DiskLocation) UnUsedSpace(volumeSizeLimit uint64) (unUsedSpace uint64) 
 	return
 }
 
+//容量上报，以及剩余容量报警
 func (l *DiskLocation) CheckDiskSpace() {
 	for {
 		if dir, e := filepath.Abs(l.Directory); e == nil {
+			//for prometheus
 			s := stats.NewDiskStatus(dir)
 			stats.VolumeServerResourceGauge.WithLabelValues(l.Directory, "all").Set(float64(s.All))
 			stats.VolumeServerResourceGauge.WithLabelValues(l.Directory, "used").Set(float64(s.Used))

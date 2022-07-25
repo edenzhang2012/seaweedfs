@@ -27,8 +27,10 @@ func (ms *MasterServer) CollectionList(ctx context.Context, req *master_pb.Colle
 	return resp, nil
 }
 
+//删除collection
 func (ms *MasterServer) CollectionDelete(ctx context.Context, req *master_pb.CollectionDeleteRequest) (*master_pb.CollectionDeleteResponse, error) {
 
+	//非leader不处理
 	if !ms.Topo.IsLeader() {
 		return nil, raft.NotLeaderError
 	}
@@ -57,6 +59,7 @@ func (ms *MasterServer) doDeleteNormalCollection(collectionName string) error {
 		return nil
 	}
 
+	//向所有的collection volume server发送删除collection的请求
 	for _, server := range collection.ListVolumeServers() {
 		err := operation.WithVolumeServerClient(false, server.ServerAddress(), ms.grpcDialOption, func(client volume_server_pb.VolumeServerClient) error {
 			_, deleteErr := client.DeleteCollection(context.Background(), &volume_server_pb.DeleteCollectionRequest{
@@ -68,11 +71,13 @@ func (ms *MasterServer) doDeleteNormalCollection(collectionName string) error {
 			return err
 		}
 	}
+	//从master内存结构中删除collection
 	ms.Topo.DeleteCollection(collectionName)
 
 	return nil
 }
 
+//EC相关
 func (ms *MasterServer) doDeleteEcCollection(collectionName string) error {
 
 	listOfEcServers := ms.Topo.ListEcServersByCollection(collectionName)

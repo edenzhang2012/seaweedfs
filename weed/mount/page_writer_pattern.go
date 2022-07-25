@@ -1,9 +1,10 @@
 package mount
 
+//记录写入的位置信息等
 type WriterPattern struct {
-	isSequentialCounter int64
-	lastWriteStopOffset int64
-	chunkSize           int64
+	isSequentialCounter int64 //顺序写次数
+	lastWriteStopOffset int64 //最后一次写入之后的offset，猜测下一次写入的起始offset
+	chunkSize           int64 //
 }
 
 // For streaming write: only cache the first chunk

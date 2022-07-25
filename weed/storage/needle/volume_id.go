@@ -6,6 +6,7 @@ import (
 
 type VolumeId uint32
 
+// string转为uint32
 func NewVolumeId(vid string) (VolumeId, error) {
 	volumeId, err := strconv.ParseUint(vid, 10, 64)
 	return VolumeId(volumeId), err

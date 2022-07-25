@@ -2,9 +2,10 @@ package topology
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/chrislusf/seaweedfs/weed/storage/types"
 	"github.com/chrislusf/seaweedfs/weed/util"
-	"sync"
 
 	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 	"github.com/chrislusf/seaweedfs/weed/storage/erasure_coding"
@@ -149,6 +150,7 @@ func (d *Disk) AddOrUpdateVolume(v storage.VolumeInfo) (isNew, isChangedRO bool)
 	return d.doAddOrUpdateVolume(v)
 }
 
+//更新volume相关内存信息
 func (d *Disk) doAddOrUpdateVolume(v storage.VolumeInfo) (isNew, isChangedRO bool) {
 	deltaDiskUsages := newDiskUsages()
 	deltaDiskUsage := deltaDiskUsages.getOrCreateDisk(types.ToDiskType(v.DiskType))

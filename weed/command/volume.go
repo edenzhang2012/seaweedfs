@@ -126,6 +126,7 @@ func runVolume(cmd *Command, args []string) bool {
 		grace.SetupProfiling(*v.cpuProfile, *v.memProfile)
 	}
 
+	//Prometheus相关
 	go stats_collect.StartMetricsServer(*v.metricsHttpPort)
 
 	minFreeSpaces := util.MustParseMinFreeSpace(*minFreeSpace, *minFreeSpacePercent)
@@ -154,6 +155,7 @@ func (v VolumeServerOptions) startVolumeServer(volumeFolders, maxVolumeCounts, v
 			glog.Fatalf("The max specified in -max not a valid number %s", maxString)
 		}
 	}
+	//如果folders有多个，但folderMaxLimits只有一个，默认将所有的folders的folderMaxLimits设置为同一个值
 	if len(v.folderMaxLimits) == 1 && len(v.folders) > 1 {
 		for i := 0; i < len(v.folders)-1; i++ {
 			v.folderMaxLimits = append(v.folderMaxLimits, v.folderMaxLimits[0])
@@ -163,6 +165,7 @@ func (v VolumeServerOptions) startVolumeServer(volumeFolders, maxVolumeCounts, v
 		glog.Fatalf("%d directories by -dir, but only %d max is set by -max", len(v.folders), len(v.folderMaxLimits))
 	}
 
+	//同folderMaxLimits
 	if len(minFreeSpaces) == 1 && len(v.folders) > 1 {
 		for i := 0; i < len(v.folders)-1; i++ {
 			minFreeSpaces = append(minFreeSpaces, minFreeSpaces[0])
@@ -178,6 +181,7 @@ func (v VolumeServerOptions) startVolumeServer(volumeFolders, maxVolumeCounts, v
 	for _, diskTypeString := range diskTypeStrings {
 		diskTypes = append(diskTypes, types.ToDiskType(diskTypeString))
 	}
+	//同folderMaxLimits
 	if len(diskTypes) == 1 && len(v.folders) > 1 {
 		for i := 0; i < len(v.folders)-1; i++ {
 			diskTypes = append(diskTypes, diskTypes[0])

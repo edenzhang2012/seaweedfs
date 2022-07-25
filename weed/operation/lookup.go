@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/pb"
-	"google.golang.org/grpc"
 	"math/rand"
 	"strings"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/pb"
+	"google.golang.org/grpc"
 
 	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 )
@@ -53,6 +54,7 @@ func LookupFileId(masterFn GetMasterFn, grpcDialOption grpc.DialOption, fileId s
 	return "http://" + lookup.Locations[rand.Intn(len(lookup.Locations))].Url + "/" + fileId, lookup.Jwt, nil
 }
 
+//向master获取volumeID信息，返回volumelocation
 func LookupVolumeId(masterFn GetMasterFn, grpcDialOption grpc.DialOption, vid string) (*LookupResult, error) {
 	results, err := LookupVolumeIds(masterFn, grpcDialOption, []string{vid})
 	return results[vid], err

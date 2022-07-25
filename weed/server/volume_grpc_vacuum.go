@@ -24,6 +24,7 @@ func (vs *VolumeServer) VacuumVolumeCheck(ctx context.Context, req *volume_serve
 
 }
 
+//压缩volume：本质是建立新的volume文件，将旧的volume文件迁移到新的volume文件，迁移的过程中去掉已经被删除的块。此时新旧volume还同时存在
 func (vs *VolumeServer) VacuumVolumeCompact(req *volume_server_pb.VacuumVolumeCompactRequest, stream volume_server_pb.VolumeServer_VacuumVolumeCompactServer) error {
 
 	resp := &volume_server_pb.VacuumVolumeCompactResponse{}
@@ -31,7 +32,9 @@ func (vs *VolumeServer) VacuumVolumeCompact(req *volume_server_pb.VacuumVolumeCo
 	nextReportTarget := reportInterval
 
 	var sendErr error
+	//压缩volume：本质是建立新的volume文件，将旧的volume文件迁移到新的volume文件，迁移的过程中去掉已经被删除的块
 	err := vs.store.CompactVolume(needle.VolumeId(req.VolumeId), req.Preallocate, vs.compactionBytePerSecond, func(processed int64) bool {
+		//每reportInterval汇报一次迁移进度
 		if processed > nextReportTarget {
 			resp.ProcessedBytes = processed
 			if sendErr = stream.Send(resp); sendErr != nil {
@@ -56,6 +59,7 @@ func (vs *VolumeServer) VacuumVolumeCompact(req *volume_server_pb.VacuumVolumeCo
 
 }
 
+//最后检查是否旧的volume数据内有新的提交，若有，同步到新的volume数据内，同时删除旧的volume数据，同时将新的volume管理数据加载进内存
 func (vs *VolumeServer) VacuumVolumeCommit(ctx context.Context, req *volume_server_pb.VacuumVolumeCommitRequest) (*volume_server_pb.VacuumVolumeCommitResponse, error) {
 
 	resp := &volume_server_pb.VacuumVolumeCommitResponse{}

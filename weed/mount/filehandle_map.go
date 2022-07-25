@@ -1,13 +1,15 @@
 package mount
 
 import (
-	"github.com/chrislusf/seaweedfs/weed/pb/filer_pb"
 	"sync"
+
+	"github.com/chrislusf/seaweedfs/weed/pb/filer_pb"
 )
 
 type FileHandleToInode struct {
 	sync.RWMutex
-	nextFh   FileHandleId
+	nextFh FileHandleId
+	//快速相互查找
 	inode2fh map[uint64]*FileHandle
 	fh2inode map[FileHandleId]uint64
 }

@@ -2,9 +2,10 @@ package storage
 
 import (
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/storage/super_block"
 	"io"
 	"os"
+
+	"github.com/chrislusf/seaweedfs/weed/storage/super_block"
 
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/storage/backend"
@@ -16,6 +17,7 @@ import (
 
 func CheckAndFixVolumeDataIntegrity(v *Volume, indexFile *os.File) (lastAppendAtNs uint64, err error) {
 	var indexSize int64
+	//验证完整性
 	if indexSize, err = verifyIndexFileIntegrity(indexFile); err != nil {
 		return 0, fmt.Errorf("verifyIndexFileIntegrity %s failed: %v", indexFile.Name(), err)
 	}
@@ -24,7 +26,7 @@ func CheckAndFixVolumeDataIntegrity(v *Volume, indexFile *os.File) (lastAppendAt
 	}
 	healthyIndexSize := indexSize
 	for i := 1; i <= 10 && indexSize >= int64(i)*NeedleMapEntrySize; i++ {
-		// check and fix last 10 entries
+		// check and fix last 10 entries, from the end to the start
 		lastAppendAtNs, err = doCheckAndFixVolumeData(v, indexFile, indexSize-int64(i)*NeedleMapEntrySize)
 		if err == io.EOF {
 			healthyIndexSize = indexSize - int64(i)*NeedleMapEntrySize
@@ -53,12 +55,12 @@ func doCheckAndFixVolumeData(v *Volume, indexFile *os.File, indexOffset int64) (
 	if offset.IsZero() {
 		return 0, nil
 	}
-	if size < 0 {
+	if size < 0 { //size < 0表示当前entry已被删除
 		// read the deletion entry
 		if lastAppendAtNs, err = verifyDeletedNeedleIntegrity(v.DataBackend, v.Version(), key); err != nil {
 			return lastAppendAtNs, fmt.Errorf("verifyNeedleIntegrity %s failed: %v", indexFile.Name(), err)
 		}
-	} else {
+	} else { //表示entry存在文件
 		if lastAppendAtNs, err = verifyNeedleIntegrity(v.DataBackend, v.Version(), offset.ToActualOffset(), key, size); err != nil {
 			return lastAppendAtNs, err
 		}
@@ -66,6 +68,7 @@ func doCheckAndFixVolumeData(v *Volume, indexFile *os.File, indexOffset int64) (
 	return lastAppendAtNs, nil
 }
 
+// 验证idx文件完整性，实际idx文件中存放的全部都是NeedleMapEntry，所以其大小一定是NeedleMapEntrySize的整数倍，若非整数倍，说明文件不完整
 func verifyIndexFileIntegrity(indexFile *os.File) (indexSize int64, err error) {
 	if indexSize, err = util.GetFileSize(indexFile); err == nil {
 		if indexSize%NeedleMapEntrySize != 0 {
@@ -85,6 +88,10 @@ func readIndexEntryAtOffset(indexFile *os.File, offset int64) (bytes []byte, err
 	return
 }
 
+/*
+校验needle完整性
+NOTE:所谓校验，其实就是检测数据完整性，查看写下去的数据与预期的元数据是否一致
+*/
 func verifyNeedleIntegrity(datFile backend.BackendStorageFile, v needle.Version, offset int64, key NeedleId, size Size) (lastAppendAtNs uint64, err error) {
 	n, _, _, err := needle.ReadNeedleHeader(datFile, v, offset)
 	if err == io.EOF {
@@ -133,6 +140,10 @@ func verifyNeedleIntegrity(datFile backend.BackendStorageFile, v needle.Version,
 	return n.AppendAtNs, err
 }
 
+/*
+校验删除操作的needle的完整性
+NOTE: 删除时会在idx文件和dat文件中都插入一个删除标记，dat文件中的删除标记是一个空的needle
+*/
 func verifyDeletedNeedleIntegrity(datFile backend.BackendStorageFile, v needle.Version, key NeedleId) (lastAppendAtNs uint64, err error) {
 	n := new(needle.Needle)
 	size := n.DiskSize(v)

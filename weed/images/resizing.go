@@ -15,6 +15,7 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
+//图片的展示大小设置
 func Resized(ext string, read io.ReadSeeker, width, height int, mode string) (resized io.ReadSeeker, w int, h int) {
 	if width == 0 && height == 0 {
 		return read, 0, 0

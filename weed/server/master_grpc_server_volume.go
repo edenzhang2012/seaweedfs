@@ -3,11 +3,12 @@ package weed_server
 import (
 	"context"
 	"fmt"
-	"github.com/chrislusf/raft"
 	"reflect"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/chrislusf/raft"
 
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
@@ -18,10 +19,14 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/topology"
 )
 
+//处理volume增长事件（通常在当前volume都被写满的情况下调用）
 func (ms *MasterServer) ProcessGrowRequest() {
 	go func() {
+		//防止重复多次收到同样的信号
 		filter := sync.Map{}
+		//死循环，常驻
 		for {
+			//等待vgCh信号
 			req, ok := <-ms.vgCh
 			if !ok {
 				break
@@ -46,9 +51,12 @@ func (ms *MasterServer) ProcessGrowRequest() {
 			vl := ms.Topo.GetVolumeLayout(option.Collection, option.ReplicaPlacement, option.Ttl, option.DiskType)
 
 			// not atomic but it's okay
+			//判断需要进行volume扩容
 			if !found && vl.ShouldGrowVolumes(option) {
+				//标记该信号已经被记录执行了
 				filter.Store(req, nil)
 				// we have lock called inside vg
+				//异步增加新的volume
 				go func() {
 					glog.V(1).Infoln("starting automatic volume grow")
 					start := time.Now()
@@ -61,6 +69,7 @@ func (ms *MasterServer) ProcessGrowRequest() {
 					}
 					vl.DoneGrowRequest()
 
+					//通知任务完成
 					if req.ErrCh != nil {
 						req.ErrCh <- err
 						close(req.ErrCh)
@@ -76,6 +85,7 @@ func (ms *MasterServer) ProcessGrowRequest() {
 	}()
 }
 
+//查询volumelocation信息
 func (ms *MasterServer) LookupVolume(ctx context.Context, req *master_pb.LookupVolumeRequest) (*master_pb.LookupVolumeResponse, error) {
 
 	resp := &master_pb.LookupVolumeResponse{}
@@ -104,16 +114,20 @@ func (ms *MasterServer) LookupVolume(ctx context.Context, req *master_pb.LookupV
 	return resp, nil
 }
 
+//获取fileID
 func (ms *MasterServer) Assign(ctx context.Context, req *master_pb.AssignRequest) (*master_pb.AssignResponse, error) {
 
+	//只有leader处理该请求
 	if !ms.Topo.IsLeader() {
 		return nil, raft.NotLeaderError
 	}
 
+	//最少申请一个
 	if req.Count == 0 {
 		req.Count = 1
 	}
 
+	//不指定副本策略，则按照默认副本策略
 	if req.Replication == "" {
 		req.Replication = ms.option.DefaultReplicaPlacement
 	}
@@ -158,6 +172,7 @@ func (ms *MasterServer) Assign(ctx context.Context, req *master_pb.AssignRequest
 		startTime  = time.Now()
 	)
 
+	//错误处理，跟http接口的区别是分配失败会重试
 	for time.Now().Sub(startTime) < maxTimeout {
 		fid, count, dnList, err := ms.Topo.PickForWrite(req.Count, option)
 		if err == nil {
@@ -189,6 +204,7 @@ func (ms *MasterServer) Assign(ctx context.Context, req *master_pb.AssignRequest
 	return nil, lastErr
 }
 
+//获取统计信息（主要是容量信息）
 func (ms *MasterServer) Statistics(ctx context.Context, req *master_pb.StatisticsRequest) (*master_pb.StatisticsResponse, error) {
 
 	if !ms.Topo.IsLeader() {

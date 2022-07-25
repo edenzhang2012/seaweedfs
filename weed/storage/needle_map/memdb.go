@@ -61,6 +61,7 @@ func (cm *MemDb) Get(key NeedleId) (*NeedleValue, bool) {
 }
 
 // Visit visits all entries or stop if any error when visiting
+//遍历needle_map中的所有项，根据传入的闭包函数visit执行不同的操作
 func (cm *MemDb) AscendingVisit(visit func(NeedleValue) error) (ret error) {
 	iter := cm.db.NewIterator(nil, nil)
 	for iter.Next() {
@@ -81,6 +82,7 @@ func (cm *MemDb) AscendingVisit(visit func(NeedleValue) error) (ret error) {
 	return
 }
 
+//将needle_map数据写入idx文件
 func (cm *MemDb) SaveToIdx(idxName string) (ret error) {
 	idxFile, err := os.OpenFile(idxName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {

@@ -2,6 +2,12 @@ package mount
 
 import (
 	"context"
+	"math/rand"
+	"os"
+	"path"
+	"path/filepath"
+	"time"
+
 	"github.com/chrislusf/seaweedfs/weed/filer"
 	"github.com/chrislusf/seaweedfs/weed/mount/meta_cache"
 	"github.com/chrislusf/seaweedfs/weed/pb"
@@ -14,11 +20,6 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/wdclient"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"google.golang.org/grpc"
-	"math/rand"
-	"os"
-	"path"
-	"path/filepath"
-	"time"
 
 	"github.com/hanwen/go-fuse/v2/fs"
 )
@@ -60,20 +61,20 @@ type Option struct {
 type WFS struct {
 	// https://dl.acm.org/doi/fullHtml/10.1145/3310148
 	// follow https://github.com/hanwen/go-fuse/blob/master/fuse/api.go
-	fuse.RawFileSystem
+	fuse.RawFileSystem //file system
 	mount_pb.UnimplementedSeaweedMountServer
-	fs.Inode
-	option            *Option
-	metaCache         *meta_cache.MetaCache
-	stats             statsCache
-	chunkCache        *chunk_cache.TieredChunkCache
+	fs.Inode                                        //go-fuse inode
+	option            *Option                       //挂载选项
+	metaCache         *meta_cache.MetaCache         //元数据缓存
+	stats             statsCache                    //容量信息缓存
+	chunkCache        *chunk_cache.TieredChunkCache //最近访问chunk的数据缓存
 	signature         int32
 	concurrentWriters *util.LimitedConcurrentExecutor
 	inodeToPath       *InodeToPath
-	fhmap             *FileHandleToInode
-	dhmap             *DirectoryHandleToInode
-	fuseServer        *fuse.Server
-	IsOverQuota       bool
+	fhmap             *FileHandleToInode      //所有打开的文件句柄
+	dhmap             *DirectoryHandleToInode //所有打开的文件夹句柄
+	fuseServer        *fuse.Server            //go-fuse server
+	IsOverQuota       bool                    //配额相关
 }
 
 func NewSeaweedFileSystem(option *Option) *WFS {

@@ -18,37 +18,38 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/glog"
 )
 
+// volume管理
 type Volume struct {
-	Id                 needle.VolumeId
-	dir                string
-	dirIdx             string
-	Collection         string
-	DataBackend        backend.BackendStorageFile
-	nm                 NeedleMapper
-	needleMapKind      NeedleMapKind
-	noWriteOrDelete    bool // if readonly, either noWriteOrDelete or noWriteCanDelete
-	noWriteCanDelete   bool // if readonly, either noWriteOrDelete or noWriteCanDelete
+	Id                 needle.VolumeId            // volume id
+	dir                string                     // 数据文件夹
+	dirIdx             string                     //idx文件目录，idx可以放到单独的目录中
+	Collection         string                     // 集合
+	DataBackend        backend.BackendStorageFile // 数据文件
+	nm                 NeedleMapper               // 索引文件
+	needleMapKind      NeedleMapKind              // 索引文件类型
+	noWriteOrDelete    bool                       // if readonly, either noWriteOrDelete or noWriteCanDelete
+	noWriteCanDelete   bool                       // if readonly, either noWriteOrDelete or noWriteCanDelete
 	noWriteLock        sync.RWMutex
-	hasRemoteFile      bool // if the volume has a remote file
-	MemoryMapMaxSizeMb uint32
+	hasRemoteFile      bool   // if the volume has a remote file
+	MemoryMapMaxSizeMb uint32 // 内存映射最大值
 
-	super_block.SuperBlock
+	super_block.SuperBlock // 超级块
 
-	dataFileAccessLock    sync.RWMutex
-	asyncRequestsChan     chan *needle.AsyncRequest
-	lastModifiedTsSeconds uint64 // unix time in seconds
-	lastAppendAtNs        uint64 // unix time in nanoseconds
+	dataFileAccessLock    sync.RWMutex              //dat文件访问锁
+	asyncRequestsChan     chan *needle.AsyncRequest //异步请求通道
+	lastModifiedTsSeconds uint64                    // unix time in seconds
+	lastAppendAtNs        uint64                    // unix time in nanoseconds
 
-	lastCompactIndexOffset uint64
-	lastCompactRevision    uint16
+	lastCompactIndexOffset uint64 //	最后一次compact的索引偏移量
+	lastCompactRevision    uint16 //	最后一次compact的版本号
 
-	isCompacting       bool
-	isCommitCompacting bool
+	isCompacting       bool // 是否正在compact
+	isCommitCompacting bool // 是否正在commit compact
 
-	volumeInfo *volume_server_pb.VolumeInfo
-	location   *DiskLocation
+	volumeInfo *volume_server_pb.VolumeInfo // volume信息
+	location   *DiskLocation                //磁盘位置
 
-	lastIoError error
+	lastIoError error //最后一次io错误
 }
 
 func NewVolume(dirname string, dirIdx string, collection string, id needle.VolumeId, needleMapKind NeedleMapKind, replicaPlacement *super_block.ReplicaPlacement, ttl *needle.TTL, preallocate int64, memoryMapMaxSizeMb uint32) (v *Volume, e error) {
@@ -57,6 +58,7 @@ func NewVolume(dirname string, dirIdx string, collection string, id needle.Volum
 		asyncRequestsChan: make(chan *needle.AsyncRequest, 128)}
 	v.SuperBlock = super_block.SuperBlock{ReplicaPlacement: replicaPlacement, Ttl: ttl}
 	v.needleMapKind = needleMapKind
+	//从文件夹中的各种文件中加载volume信息到内存
 	e = v.load(true, true, needleMapKind, preallocate)
 	v.startWorker()
 	return
@@ -86,6 +88,7 @@ func (v *Volume) IndexFileName() (fileName string) {
 	return VolumeFileName(v.dirIdx, v.Collection, int(v.Id))
 }
 
+// 根据后缀获取完整的文件名
 func (v *Volume) FileName(ext string) (fileName string) {
 	switch ext {
 	case ".idx", ".cpx", ".ldb":

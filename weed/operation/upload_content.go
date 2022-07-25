@@ -4,10 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/glog"
-	"github.com/chrislusf/seaweedfs/weed/pb/filer_pb"
-	"github.com/chrislusf/seaweedfs/weed/security"
-	"github.com/chrislusf/seaweedfs/weed/util"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -17,28 +13,33 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/glog"
+	"github.com/chrislusf/seaweedfs/weed/pb/filer_pb"
+	"github.com/chrislusf/seaweedfs/weed/security"
+	"github.com/chrislusf/seaweedfs/weed/util"
 )
 
 type UploadOption struct {
-	UploadUrl         string
-	Filename          string
-	Cipher            bool
-	IsInputCompressed bool
-	MimeType          string
-	PairMap           map[string]string
-	Jwt               security.EncodedJwt
+	UploadUrl         string              //上传地址
+	Filename          string              //文件名
+	Cipher            bool                //是否加密
+	IsInputCompressed bool                //是否压缩
+	MimeType          string              //文件类型
+	PairMap           map[string]string   //自定义参数
+	Jwt               security.EncodedJwt //jwt
 }
 
 type UploadResult struct {
-	Name       string `json:"name,omitempty"`
-	Size       uint32 `json:"size,omitempty"`
-	Error      string `json:"error,omitempty"`
-	ETag       string `json:"eTag,omitempty"`
-	CipherKey  []byte `json:"cipherKey,omitempty"`
-	Mime       string `json:"mime,omitempty"`
-	Gzip       uint32 `json:"gzip,omitempty"`
-	ContentMd5 string `json:"contentMd5,omitempty"`
-	RetryCount int    `json:"-"`
+	Name       string `json:"name,omitempty"`       //文件名
+	Size       uint32 `json:"size,omitempty"`       //文件大小
+	Error      string `json:"error,omitempty"`      //错误信息
+	ETag       string `json:"eTag,omitempty"`       //文件md5
+	CipherKey  []byte `json:"cipherKey,omitempty"`  //加密key
+	Mime       string `json:"mime,omitempty"`       //文件类型
+	Gzip       uint32 `json:"gzip,omitempty"`       //是否压缩
+	ContentMd5 string `json:"contentMd5,omitempty"` //文件md5
+	RetryCount int    `json:"-"`                    //重试次数
 }
 
 func (uploadResult *UploadResult) ToPbFileChunk(fileId string, offset int64) *filer_pb.FileChunk {

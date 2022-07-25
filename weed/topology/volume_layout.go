@@ -3,10 +3,11 @@ package topology
 import (
 	"errors"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/storage/types"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/storage/types"
 
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/storage"
@@ -103,18 +104,18 @@ func (v *volumesBinaryState) copyState(list *VolumeLocationList) copyState {
 
 // mapping from volume to its locations, inverted from server to volume
 type VolumeLayout struct {
-	rp               *super_block.ReplicaPlacement
+	rp               *super_block.ReplicaPlacement //副本分布方式
 	ttl              *needle.TTL
-	diskType         types.DiskType
-	vid2location     map[needle.VolumeId]*VolumeLocationList
-	writables        []needle.VolumeId // transient array of writable volume id
-	crowded          map[needle.VolumeId]struct{}
-	readonlyVolumes  *volumesBinaryState // readonly volumes
-	oversizedVolumes *volumesBinaryState // oversized volumes
-	volumeSizeLimit  uint64
+	diskType         types.DiskType                          //盘类型
+	vid2location     map[needle.VolumeId]*VolumeLocationList //volume的位置记录
+	writables        []needle.VolumeId                       // transient array of writable volume id
+	crowded          map[needle.VolumeId]struct{}            //volume已使用容量超过总容量的一定阈值，认为该volume为crowed
+	readonlyVolumes  *volumesBinaryState                     // readonly volumes
+	oversizedVolumes *volumesBinaryState                     // oversized volumes
+	volumeSizeLimit  uint64                                  //volume大小限制
 	replicationAsMin bool
 	accessLock       sync.RWMutex
-	growRequestCount int
+	growRequestCount int //volume增长数量
 	growRequestTime  time.Time
 }
 
@@ -277,6 +278,7 @@ func (vl *VolumeLayout) ListVolumeServers() (nodes []*DataNode) {
 	return
 }
 
+//挑选一个volume，并返回对应的volumeID和volume location
 func (vl *VolumeLayout) PickForWrite(count uint64, option *VolumeGrowOption) (*needle.VolumeId, uint64, *VolumeLocationList, error) {
 	vl.accessLock.RLock()
 	defer vl.accessLock.RUnlock()
@@ -286,8 +288,9 @@ func (vl *VolumeLayout) PickForWrite(count uint64, option *VolumeGrowOption) (*n
 		//glog.V(0).Infoln("No more writable volumes!")
 		return nil, 0, nil, errors.New("No more writable volumes!")
 	}
+	//对文件位置没有任何要求的话，直接从所有的可写volume列表中随机返回一个
 	if option.DataCenter == "" && option.Rack == "" && option.DataNode == "" {
-		vid := vl.writables[rand.Intn(lenWriters)]
+		vid := vl.writables[rand.Intn(lenWriters)] //从可写列表中随机选取一个volume
 		locationList := vl.vid2location[vid]
 		if locationList != nil {
 			return &vid, count, locationList, nil
@@ -297,6 +300,7 @@ func (vl *VolumeLayout) PickForWrite(count uint64, option *VolumeGrowOption) (*n
 	var vid needle.VolumeId
 	var locationList *VolumeLocationList
 	counter := 0
+	//遍历所有可写的volume，按照DataCenter，Rack，DataNode进行匹配
 	for _, v := range vl.writables {
 		volumeLocationList := vl.vid2location[v]
 		for _, dn := range volumeLocationList.list {
@@ -333,21 +337,26 @@ func (vl *VolumeLayout) DoneGrowRequest() {
 	vl.growRequestCount = 0
 }
 
+//active <= crowded(即几乎所有的volume都被标记为crowed)就需要增加volumes
 func (vl *VolumeLayout) ShouldGrowVolumes(option *VolumeGrowOption) bool {
 	active, crowded := vl.GetActiveVolumeCount(option)
 	//glog.V(0).Infof("active volume: %d, high usage volume: %d\n", active, high)
 	return active <= crowded
 }
 
+//统计active与crowded个数
 func (vl *VolumeLayout) GetActiveVolumeCount(option *VolumeGrowOption) (active, crowded int) {
 	vl.accessLock.RLock()
 	defer vl.accessLock.RUnlock()
 
+	//未指定datacenter，直接返回自身的值
 	if option.DataCenter == "" {
 		return len(vl.writables), len(vl.crowded)
 	}
+	//
 	for _, v := range vl.writables {
 		for _, dn := range vl.vid2location[v].list {
+			//只匹配特定datacenter，特定rack和特定DataNode的数据
 			if dn.GetDataCenter().Id() == NodeId(option.DataCenter) {
 				if option.Rack != "" && dn.GetRack().Id() != NodeId(option.Rack) {
 					continue
@@ -366,6 +375,7 @@ func (vl *VolumeLayout) GetActiveVolumeCount(option *VolumeGrowOption) (active, 
 	return
 }
 
+//将vid从可写列表移除
 func (vl *VolumeLayout) removeFromWritable(vid needle.VolumeId) bool {
 	toDeleteIndex := -1
 	for k, id := range vl.writables {
@@ -440,6 +450,7 @@ func (vl *VolumeLayout) SetVolumeCapacityFull(vid needle.VolumeId) bool {
 	vl.accessLock.Lock()
 	defer vl.accessLock.Unlock()
 
+	//置为不可写，同时从crowded列表移除
 	wasWritable := vl.removeFromWritable(vid)
 	if wasWritable {
 		glog.V(0).Infof("Volume %d reaches full capacity.", vid)
@@ -482,6 +493,7 @@ func (vl *VolumeLayout) ToMap() map[string]interface{} {
 	return m
 }
 
+//通过VolumeLayout计算容量信息
 func (vl *VolumeLayout) Stats() *VolumeLayoutStats {
 	vl.accessLock.RLock()
 	defer vl.accessLock.RUnlock()

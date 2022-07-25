@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/s3api/s3_constants"
 	"io"
 	"io/fs"
 	"mime/multipart"
@@ -16,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/s3api/s3_constants"
 
 	"google.golang.org/grpc"
 
@@ -188,6 +189,15 @@ func submitForClientHandler(w http.ResponseWriter, r *http.Request, masterFn ope
 	return
 }
 
+/*
+http://localhost:8080/3/01637037d6/my_preferred_name.jpg
+http://localhost:8080/3/01637037d6.jpg
+http://localhost:8080/3,01637037d6.jpg
+http://localhost:8080/3/01637037d6
+http://localhost:8080/3,01637037d6
+
+从URL中解析出vid(volume ID),fid(文件ID)，filename（文件名），ext（文件类型）
+*/
 func parseURLPath(path string) (vid, fid, filename, ext string, isVolumeIdOnly bool) {
 	switch strings.Count(path, "/") {
 	case 3:
@@ -242,6 +252,7 @@ func statsMemoryHandler(w http.ResponseWriter, r *http.Request) {
 
 var StaticFS fs.FS
 
+// 处理http静态资源
 func handleStaticResources(defaultMux *http.ServeMux) {
 	defaultMux.Handle("/favicon.ico", http.FileServer(http.FS(StaticFS)))
 	defaultMux.Handle("/seaweedfsstatic/", http.StripPrefix("/seaweedfsstatic", http.FileServer(http.FS(StaticFS))))

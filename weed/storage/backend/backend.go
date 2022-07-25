@@ -1,11 +1,12 @@
 package backend
 
 import (
-	"github.com/chrislusf/seaweedfs/weed/util"
 	"io"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/util"
 
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
@@ -19,7 +20,7 @@ type BackendStorageFile interface {
 	io.Closer
 	GetStat() (datSize int64, modTime time.Time, err error)
 	Name() string
-	Sync() error
+	Sync() error //目前都是空实现
 }
 
 type BackendStorage interface {

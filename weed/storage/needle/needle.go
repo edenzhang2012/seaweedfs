@@ -27,9 +27,9 @@ type Needle struct {
 	Id     NeedleId `comment:"needle id"`
 	Size   Size     `comment:"sum of DataSize,Data,NameSize,Name,MimeSize,Mime"`
 
-	DataSize     uint32 `comment:"Data size"` //version2
-	Data         []byte `comment:"The actual file data"`
-	Flags        byte   `comment:"boolean flags"` //version2
+	DataSize     uint32 `comment:"Data size"`            //version2
+	Data         []byte `comment:"The actual file data"` //实际的数据
+	Flags        byte   `comment:"boolean flags"`        //version2
 	NameSize     uint8  //version2
 	Name         []byte `comment:"maximum 255 characters"` //version2
 	MimeSize     uint8  //version2
@@ -49,6 +49,7 @@ func (n *Needle) String() (str string) {
 	return
 }
 
+// 从POST请求创建needle信息
 func CreateNeedleFromRequest(r *http.Request, fixJpgOrientation bool, sizeLimit int64, bytesBuffer *bytes.Buffer) (n *Needle, originalSize int, contentMd5 string, e error) {
 	n = new(Needle)
 	pu, e := ParseUpload(r, sizeLimit, bytesBuffer)
@@ -118,6 +119,8 @@ func CreateNeedleFromRequest(r *http.Request, fixJpgOrientation bool, sizeLimit 
 
 	return
 }
+
+// 从fid字符串中解析出Needle.Id和Needle.Cookie
 func (n *Needle) ParsePath(fid string) (err error) {
 	length := len(fid)
 	if length <= CookieSize*2 {

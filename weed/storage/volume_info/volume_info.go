@@ -59,6 +59,7 @@ func MaybeLoadVolumeInfo(fileName string) (volumeInfo *volume_server_pb.VolumeIn
 	return
 }
 
+//将VolumeInfo写入文件
 func SaveVolumeInfo(fileName string, volumeInfo *volume_server_pb.VolumeInfo) error {
 
 	if exists, _, canWrite, _, _ := util.CheckFile(fileName); exists && !canWrite {

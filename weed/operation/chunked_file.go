@@ -54,7 +54,9 @@ func (s ChunkList) Len() int           { return len(s) }
 func (s ChunkList) Less(i, j int) bool { return s[i].Offset < s[j].Offset }
 func (s ChunkList) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
+//从buffer中获取ChunkManifest
 func LoadChunkManifest(buffer []byte, isCompressed bool) (*ChunkManifest, error) {
+	//解压
 	if isCompressed {
 		var err error
 		if buffer, err = util.DecompressData(buffer); err != nil {
@@ -65,6 +67,7 @@ func LoadChunkManifest(buffer []byte, isCompressed bool) (*ChunkManifest, error)
 	if e := json.Unmarshal(buffer, &cm); e != nil {
 		return nil, e
 	}
+	//升序排列
 	sort.Sort(cm.Chunks)
 	return &cm, nil
 }
@@ -127,6 +130,7 @@ func readChunkNeedle(fileUrl string, w io.Writer, offset int64, jwt string) (wri
 	return io.Copy(w, resp.Body)
 }
 
+//生成ChunkedFile的读IO流
 func NewChunkedFileReader(chunkList []*ChunkInfo, master pb.ServerAddress, grpcDialOption grpc.DialOption) *ChunkedFileReader {
 	var totalSize int64
 	for _, chunk := range chunkList {

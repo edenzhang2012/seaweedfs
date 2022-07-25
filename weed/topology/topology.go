@@ -24,10 +24,10 @@ import (
 )
 
 type Topology struct {
-	vacuumLockCounter int64
+	vacuumLockCounter int64 //保证只有一个vacuum程序在执行
 	NodeImpl
 
-	collectionMap  *util.ConcurrentReadMap
+	collectionMap  *util.ConcurrentReadMap //Collection，这个结构里包含两层map，最终指向所有的VolumeLayout
 	ecShardMap     map[needle.VolumeId]*EcShardLocations
 	ecShardMapLock sync.RWMutex
 
@@ -38,8 +38,8 @@ type Topology struct {
 
 	Sequence sequence.Sequencer
 
-	chanFullVolumes    chan storage.VolumeInfo
-	chanCrowdedVolumes chan storage.VolumeInfo
+	chanFullVolumes    chan storage.VolumeInfo //volumes已满信号，volume信息已经包含在信号内
+	chanCrowdedVolumes chan storage.VolumeInfo //volume需要扩容信号，volume信息已经包含在信号内
 
 	Configuration *Configuration
 
@@ -133,6 +133,7 @@ func (t *Topology) Lookup(collection string, vid needle.VolumeId) (dataNodes []*
 	return nil
 }
 
+//获取volumeID，全集群唯一，依靠raft保证
 func (t *Topology) NextVolumeId() (needle.VolumeId, error) {
 	vid := t.GetMaxVolumeId()
 	next := vid.Next()
@@ -159,20 +160,27 @@ func (t *Topology) HasWritableVolume(option *VolumeGrowOption) bool {
 	return active > 0
 }
 
+//生成fileID
 func (t *Topology) PickForWrite(count uint64, option *VolumeGrowOption) (string, uint64, *VolumeLocationList, error) {
-	vid, count, datanodes, err := t.GetVolumeLayout(option.Collection, option.ReplicaPlacement, option.Ttl, option.DiskType).PickForWrite(count, option)
+	vid, count, datanodes, err := t.GetVolumeLayout(option.Collection, option.ReplicaPlacement, option.Ttl,
+		option.DiskType).PickForWrite(count, option)
 	if err != nil {
-		return "", 0, nil, fmt.Errorf("failed to find writable volumes for collection:%s replication:%s ttl:%s error: %v", option.Collection, option.ReplicaPlacement.String(), option.Ttl.String(), err)
+		return "", 0, nil, fmt.Errorf("failed to find writable volumes for collection:%s replication:%s ttl:%s error: %v",
+			option.Collection, option.ReplicaPlacement.String(), option.Ttl.String(), err)
 	}
 	if datanodes.Length() == 0 {
-		return "", 0, nil, fmt.Errorf("no writable volumes available for collection:%s replication:%s ttl:%s", option.Collection, option.ReplicaPlacement.String(), option.Ttl.String())
+		return "", 0, nil, fmt.Errorf("no writable volumes available for collection:%s replication:%s ttl:%s",
+			option.Collection, option.ReplicaPlacement.String(), option.Ttl.String())
 	}
 	fileId := t.Sequence.NextFileId(count)
 	return needle.NewFileId(*vid, fileId, rand.Uint32()).String(), count, datanodes, nil
 }
 
-func (t *Topology) GetVolumeLayout(collectionName string, rp *super_block.ReplicaPlacement, ttl *needle.TTL, diskType types.DiskType) *VolumeLayout {
-	return t.collectionMap.Get(collectionName, func() interface{} {
+//获取VolumeLayout，如果不存在则创建
+func (t *Topology) GetVolumeLayout(collectionName string, rp *super_block.ReplicaPlacement,
+	ttl *needle.TTL, diskType types.DiskType) *VolumeLayout {
+
+	return t.collectionMap.Get(collectionName, func() interface{} { //匿名函数：创建一个新的Collection
 		return NewCollection(collectionName, t.volumeSizeLimit, t.replicationAsMin)
 	}).(*Collection).GetOrCreateVolumeLayout(rp, ttl, diskType)
 }
@@ -221,6 +229,7 @@ func (t *Topology) DeleteLayout(collectionName string, rp *super_block.ReplicaPl
 	}
 }
 
+//将volume信息添加到volumelayout
 func (t *Topology) RegisterVolumeLayout(v storage.VolumeInfo, dn *DataNode) {
 	diskType := types.ToDiskType(v.DiskType)
 	vl := t.GetVolumeLayout(v.Collection, v.ReplicaPlacement, v.Ttl, diskType)
@@ -249,6 +258,7 @@ func (t *Topology) GetOrCreateDataCenter(dcName string) *DataCenter {
 	return dc
 }
 
+//根据发送过来的信息与本地信息对比，找到差值并返回
 func (t *Topology) SyncDataNodeRegistration(volumes []*master_pb.VolumeInformationMessage, dn *DataNode) (newVolumes, deletedVolumes []storage.VolumeInfo) {
 	// convert into in memory struct storage.VolumeInfo
 	var volumeInfos []storage.VolumeInfo

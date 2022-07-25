@@ -20,11 +20,17 @@ const (
 )
 
 type NeedleMapper interface {
+	//插入记录
 	Put(key NeedleId, offset Offset, size Size) error
+	//获取记录
 	Get(key NeedleId) (element *needle_map.NeedleValue, ok bool)
+	//删除记录
 	Delete(key NeedleId, offset Offset) error
+	//关闭连接
 	Close()
+	//退出前的处理
 	Destroy() error
+	//以下为非mapper相关处理流程
 	ContentSize() uint64
 	DeletedSize() uint64
 	FileCount() int

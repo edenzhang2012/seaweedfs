@@ -1,12 +1,13 @@
 package mount
 
 import (
+	"sync"
+
 	"github.com/chrislusf/seaweedfs/weed/filer"
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/pb/filer_pb"
 	"github.com/chrislusf/seaweedfs/weed/util"
 	"golang.org/x/exp/slices"
-	"sync"
 )
 
 type FileHandleId uint64
@@ -21,7 +22,7 @@ type FileHandle struct {
 
 	// cache file has been written to
 	dirtyMetadata  bool
-	dirtyPages     *PageWriter
+	dirtyPages     *PageWriter //page cache???
 	entryViewCache []filer.VisibleInterval
 	reader         *filer.ChunkReadAt
 	contentType    string

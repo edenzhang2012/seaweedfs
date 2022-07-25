@@ -45,6 +45,7 @@ func FileExists(filename string) bool {
 
 }
 
+//检查文件状态
 func CheckFile(filename string) (exists, canRead, canWrite bool, modTime time.Time, fileSize int64) {
 	exists = true
 	fi, err := os.Stat(filename)
@@ -67,6 +68,7 @@ func CheckFile(filename string) (exists, canRead, canWrite bool, modTime time.Ti
 	return
 }
 
+//将”~“替换为绝对路径
 func ResolvePath(path string) string {
 
 	if !strings.Contains(path, "~") {
@@ -96,7 +98,7 @@ func FileNameBase(filename string) string {
 	return filename[:lastDotIndex]
 }
 
-// Copied from os.WriteFile(), adding file sync.
+// Copied from os.WriteFile(), adding file sync. 保证数据落盘
 // see https://github.com/golang/go/issues/20599
 func WriteFile(name string, data []byte, perm os.FileMode) error {
 	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)

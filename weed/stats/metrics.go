@@ -234,11 +234,13 @@ func LoopPushingMetric(name, instance, addr string, intervalSeconds int) {
 	}
 }
 
+//Prometheus相关
 func StartMetricsServer(port int) {
 	if port == 0 {
 		return
 	}
 	http.Handle("/metrics", promhttp.HandlerFor(Gather, promhttp.HandlerOpts{}))
+	//ListenAndServe will block
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
 

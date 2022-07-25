@@ -31,6 +31,7 @@ type Configuration interface {
 	SetDefault(key string, value interface{})
 }
 
+//加载配置文件到内存
 func LoadConfiguration(configFileName string, required bool) (loaded bool) {
 
 	// find a filer store

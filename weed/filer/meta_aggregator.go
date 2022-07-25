@@ -3,12 +3,13 @@ package filer
 import (
 	"context"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/cluster"
-	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
-	"github.com/chrislusf/seaweedfs/weed/util"
 	"io"
 	"sync"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/cluster"
+	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
+	"github.com/chrislusf/seaweedfs/weed/util"
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
@@ -48,6 +49,7 @@ func NewMetaAggregator(filer *Filer, self pb.ServerAddress, grpcDialOption grpc.
 	return t
 }
 
+// 每次当收到更新后执行的函数
 func (ma *MetaAggregator) OnPeerUpdate(update *master_pb.ClusterNodeUpdate, startFrom time.Time) {
 	if update.NodeType != cluster.FilerType {
 		return
@@ -72,6 +74,7 @@ func (ma *MetaAggregator) setActive(address pb.ServerAddress, isActive bool) (no
 			ma.peerStatues[address] += 1
 		} else {
 			ma.peerStatues[address] = 1
+			//只有第一次收到通知时，才返回TRUE
 			notDuplicated = true
 		}
 	} else {
@@ -89,6 +92,7 @@ func (ma *MetaAggregator) isActive(address pb.ServerAddress) (isActive bool) {
 	return count > 0 && isActive
 }
 
+// 订阅filer
 func (ma *MetaAggregator) loopSubscribeToOneFiler(f *Filer, self pb.ServerAddress, peer pb.ServerAddress, startFrom time.Time) {
 	lastTsNs := startFrom.UnixNano()
 	for {
@@ -108,6 +112,7 @@ func (ma *MetaAggregator) loopSubscribeToOneFiler(f *Filer, self pb.ServerAddres
 	}
 }
 
+//filer订阅事件处理
 func (ma *MetaAggregator) doSubscribeToOneFiler(f *Filer, self pb.ServerAddress, peer pb.ServerAddress, startFrom int64) (int64, error) {
 
 	/*
@@ -133,6 +138,7 @@ func (ma *MetaAggregator) doSubscribeToOneFiler(f *Filer, self pb.ServerAddress,
 	if peerSignature != f.Signature {
 		if prevTsNs, err := ma.readOffset(f, peer, peerSignature); err == nil {
 			lastTsNs = prevTsNs
+			//更新时间
 			defer func(prevTsNs int64) {
 				if lastTsNs != prevTsNs && lastTsNs != lastPersistTime.UnixNano() {
 					if err := ma.updateOffset(f, peer, peerSignature, lastTsNs); err == nil {
@@ -147,6 +153,7 @@ func (ma *MetaAggregator) doSubscribeToOneFiler(f *Filer, self pb.ServerAddress,
 		glog.V(0).Infof("follow peer: %v, last %v (%d)", peer, time.Unix(0, lastTsNs), lastTsNs)
 		var counter int64
 		var synced bool
+		//功能如其名
 		maybeReplicateMetadataChange = func(event *filer_pb.SubscribeMetadataResponse) {
 			if err := Replay(f.Store, event); err != nil {
 				glog.Errorf("failed to reply metadata change from %v: %v", peer, err)
@@ -170,6 +177,7 @@ func (ma *MetaAggregator) doSubscribeToOneFiler(f *Filer, self pb.ServerAddress,
 		}
 	}
 
+	//将event数据按照一定的格式marshal后添加到metabuffer内存结构，并在本地重放event事件
 	processEventFn := func(event *filer_pb.SubscribeMetadataResponse) error {
 		data, err := proto.Marshal(event)
 		if err != nil {
@@ -219,6 +227,7 @@ func (ma *MetaAggregator) doSubscribeToOneFiler(f *Filer, self pb.ServerAddress,
 	return lastTsNs, err
 }
 
+//读取peer的配置，并获取Signature
 func (ma *MetaAggregator) readFilerStoreSignature(peer pb.ServerAddress) (sig int32, err error) {
 	err = pb.WithFilerClient(false, peer, ma.grpcDialOption, func(client filer_pb.SeaweedFilerClient) error {
 		resp, err := client.GetFilerConfiguration(context.Background(), &filer_pb.GetFilerConfigurationRequest{})
@@ -235,6 +244,7 @@ const (
 	MetaOffsetPrefix = "Meta"
 )
 
+//从数据库读取时间并返回
 func (ma *MetaAggregator) readOffset(f *Filer, peer pb.ServerAddress, peerSignature int32) (lastTsNs int64, err error) {
 
 	key := []byte(MetaOffsetPrefix + "xxxx")

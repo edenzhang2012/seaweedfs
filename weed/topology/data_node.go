@@ -2,6 +2,7 @@ package topology
 
 import (
 	"fmt"
+
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/pb"
 	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
@@ -132,6 +133,7 @@ func (dn *DataNode) DeltaUpdateVolumes(newVolumes, deletedVolumes []storage.Volu
 	return
 }
 
+//更新最大volume count
 func (dn *DataNode) AdjustMaxVolumeCounts(maxVolumeCounts map[string]uint32) {
 	deltaDiskUsages := newDiskUsages()
 	for diskType, maxVolumeCount := range maxVolumeCounts {
@@ -179,6 +181,7 @@ func (dn *DataNode) GetVolumesById(id needle.VolumeId) (vInfo storage.VolumeInfo
 	}
 }
 
+//通过parent找到datacenter结构
 func (dn *DataNode) GetDataCenter() *DataCenter {
 	rack := dn.Parent()
 	if rack == nil {

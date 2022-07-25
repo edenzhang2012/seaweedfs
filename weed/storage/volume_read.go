@@ -2,9 +2,10 @@ package storage
 
 import (
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/util/mem"
 	"io"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/util/mem"
 
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/storage/backend"
@@ -13,18 +14,21 @@ import (
 	. "github.com/chrislusf/seaweedfs/weed/storage/types"
 )
 
-const PagedReadLimit = 1024 * 1024
+const PagedReadLimit = 1024 * 1024 //1M
 
 // read fills in Needle content by looking up n.Id from NeedleMapper
 func (v *Volume) readNeedle(n *needle.Needle, readOption *ReadOption, onReadSizeFn func(size Size)) (count int, err error) {
 	v.dataFileAccessLock.RLock()
 	defer v.dataFileAccessLock.RUnlock()
 
+	//从needleMap获取needle的位置
 	nv, ok := v.nm.Get(n.Id)
+	//文件实际的offset不可能为0，因为dat文件最前面有superblock信息
 	if !ok || nv.Offset.IsZero() {
 		return -1, ErrorNotFound
 	}
 	readSize := nv.Size
+	//needle已经被删除
 	if readSize.IsDeleted() {
 		if readOption != nil && readOption.ReadDeleted && readSize != TombstoneFileSize {
 			glog.V(3).Infof("reading deleted %s", n.String())
@@ -33,14 +37,17 @@ func (v *Volume) readNeedle(n *needle.Needle, readOption *ReadOption, onReadSize
 			return -1, ErrorDeleted
 		}
 	}
+	//文件长度为0
 	if readSize == 0 {
 		return 0, nil
 	}
 	if onReadSizeFn != nil {
 		onReadSizeFn(readSize)
 	}
+	//只读取meta数据且文件长度大于1M
 	if readOption != nil && readOption.AttemptMetaOnly && readSize > PagedReadLimit {
 		readOption.VolumeRevision = v.SuperBlock.CompactionRevision
+		//读取并解析needle meta信息
 		err = n.ReadNeedleMeta(v.DataBackend, nv.Offset.ToActualOffset(), readSize, v.Version())
 		if err == needle.ErrorSizeMismatch && OffsetSize == 4 {
 			readOption.IsOutOfRange = true
@@ -53,6 +60,7 @@ func (v *Volume) readNeedle(n *needle.Needle, readOption *ReadOption, onReadSize
 			readOption.IsMetaOnly = true
 		}
 	}
+	//需要读取meta和data数据。进入这个分支则，上面的分支一定不会进入，所以需要同时解析meta数据
 	if readOption == nil || !readOption.IsMetaOnly {
 		err = n.ReadData(v.DataBackend, nv.Offset.ToActualOffset(), readSize, v.Version())
 		if err == needle.ErrorSizeMismatch && OffsetSize == 4 {
@@ -67,6 +75,7 @@ func (v *Volume) readNeedle(n *needle.Needle, readOption *ReadOption, onReadSize
 	if !n.HasTtl() {
 		return
 	}
+	//判断是否更改过数据或者元数据，并更新ttl
 	ttlMinutes := n.Ttl.Minutes()
 	if ttlMinutes == 0 {
 		return

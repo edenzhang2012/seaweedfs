@@ -2,6 +2,7 @@ package topology
 
 import (
 	"fmt"
+
 	"github.com/chrislusf/seaweedfs/weed/storage/types"
 
 	"github.com/chrislusf/seaweedfs/weed/storage/needle"
@@ -13,7 +14,7 @@ type Collection struct {
 	Name                     string
 	volumeSizeLimit          uint64
 	replicationAsMin         bool
-	storageType2VolumeLayout *util.ConcurrentReadMap
+	storageType2VolumeLayout *util.ConcurrentReadMap //VolumeLayout
 }
 
 func NewCollection(name string, volumeSizeLimit uint64, replicationAsMin bool) *Collection {

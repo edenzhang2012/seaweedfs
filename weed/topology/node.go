@@ -2,14 +2,15 @@ package topology
 
 import (
 	"errors"
+	"math/rand"
+	"strings"
+	"sync"
+
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/stats"
 	"github.com/chrislusf/seaweedfs/weed/storage/erasure_coding"
 	"github.com/chrislusf/seaweedfs/weed/storage/needle"
 	"github.com/chrislusf/seaweedfs/weed/storage/types"
-	"math/rand"
-	"strings"
-	"sync"
 )
 
 type NodeId string
@@ -54,6 +55,7 @@ func (n *NodeImpl) GetDiskUsages() *DiskUsages {
 }
 
 // the first node must satisfy filterFirstNodeFn(), the rest nodes must have one free slot
+//以剩余可用空间大小为权重，选出最适合的节点和其他合适的节点并返回
 func (n *NodeImpl) PickNodesByWeight(numberOfNodes int, option *VolumeGrowOption, filterFirstNodeFn func(dn Node) error) (firstNode Node, restNodes []Node, err error) {
 	var totalWeights int64
 	var errs []string
@@ -137,6 +139,8 @@ func (n *NodeImpl) Id() NodeId {
 func (n *NodeImpl) getOrCreateDisk(diskType types.DiskType) *DiskUsageCounts {
 	return n.diskUsages.getOrCreateDisk(diskType)
 }
+
+//检查对应disktype的剩余空间
 func (n *NodeImpl) AvailableSpaceFor(option *VolumeGrowOption) int64 {
 	t := n.getOrCreateDisk(option.DiskType)
 	freeVolumeSlotCount := t.maxVolumeCount + t.remoteVolumeCount - t.volumeCount
@@ -236,19 +240,25 @@ func (n *NodeImpl) UnlinkChildNode(nodeId NodeId) {
 	}
 }
 
+//遍历当前集群中的所有volume，检查volume是否已经达到最大限额或者是否达到增长的阈值，若是则发出该volume的对应事件；
+//这里也会想Prometheus发送相应的事件
 func (n *NodeImpl) CollectDeadNodeAndFullVolumes(freshThreshHold int64, volumeSizeLimit uint64, growThreshold float64) {
+	//机架级别需要处理
 	if n.IsRack() {
+		//遍历机架下的所有节点
 		for _, c := range n.Children() {
 			dn := c.(*DataNode) //can not cast n to DataNode
+			//遍历节点上的所有volumes
 			for _, v := range dn.GetVolumes() {
-				if v.Size >= volumeSizeLimit {
+				if v.Size >= volumeSizeLimit { //当前volume容量已经达到限值
 					//fmt.Println("volume",v.Id,"size",v.Size,">",volumeSizeLimit)
 					n.GetTopology().chanFullVolumes <- v
-				} else if float64(v.Size) > float64(volumeSizeLimit)*growThreshold {
+				} else if float64(v.Size) > float64(volumeSizeLimit)*growThreshold { //当前容量达到增长阈值
 					n.GetTopology().chanCrowdedVolumes <- v
 				}
+				//prometheus相关
 				copyCount := v.ReplicaPlacement.GetCopyCount()
-				if copyCount > 1 {
+				if copyCount > 1 { //副本数大于1
 					if copyCount > len(n.GetTopology().Lookup(v.Collection, v.Id)) {
 						stats.MasterReplicaPlacementMismatch.WithLabelValues(v.Collection, v.Id.String()).Set(1)
 					} else {
@@ -257,8 +267,10 @@ func (n *NodeImpl) CollectDeadNodeAndFullVolumes(freshThreshHold int64, volumeSi
 				}
 			}
 		}
-	} else {
+	} else { //其他级别处理
+		//遍历子节点
 		for _, c := range n.Children() {
+			//递归查询
 			c.CollectDeadNodeAndFullVolumes(freshThreshHold, volumeSizeLimit, growThreshold)
 		}
 	}

@@ -3,12 +3,13 @@ package needle
 import (
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/chrislusf/seaweedfs/weed/glog"
 	"github.com/chrislusf/seaweedfs/weed/stats"
 	"github.com/chrislusf/seaweedfs/weed/storage/backend"
 	. "github.com/chrislusf/seaweedfs/weed/storage/types"
 	"github.com/chrislusf/seaweedfs/weed/util"
-	"io"
 )
 
 const (
@@ -29,6 +30,7 @@ func (n *Needle) DiskSize(version Version) int64 {
 	return GetActualSize(n.Size, version)
 }
 
+//从dat文件读取meta+data到dataSlice中
 func ReadNeedleBlob(r backend.BackendStorageFile, offset int64, size Size, version Version) (dataSlice []byte, err error) {
 
 	dataSize := GetActualSize(size, version)
@@ -48,6 +50,7 @@ func ReadNeedleBlob(r backend.BackendStorageFile, offset int64, size Size, versi
 }
 
 // ReadBytes hydrates the needle from the bytes buffer, with only n.Id is set.
+//从bytes读取数据到needle中，同时填充meta+header数据
 func (n *Needle) ReadBytes(bytes []byte, offset int64, size Size, version Version) (err error) {
 	n.ParseNeedleHeader(bytes)
 	if n.Size != size {
@@ -70,7 +73,9 @@ func (n *Needle) ReadBytes(bytes []byte, offset int64, size Size, version Versio
 		return err
 	}
 	if size > 0 {
+		//从存储的数据中获取CRC
 		checksum := util.BytesToUint32(bytes[NeedleHeaderSize+size : NeedleHeaderSize+size+NeedleChecksumSize])
+		//实际计算数据CRC
 		newChecksum := NewCRC(n.Data)
 		if checksum != newChecksum.Value() && checksum != uint32(newChecksum) {
 			// the crc.Value() function is to be deprecated. this double checking is for backward compatible.
@@ -87,6 +92,7 @@ func (n *Needle) ReadBytes(bytes []byte, offset int64, size Size, version Versio
 }
 
 // ReadData hydrates the needle from the file, with only n.Id is set.
+//先从dat文件将needle数据读取到内存中，然后解析内存中的数据到needle里
 func (n *Needle) ReadData(r backend.BackendStorageFile, offset int64, size Size, version Version) (err error) {
 	bytes, err := ReadNeedleBlob(r, offset, size, version)
 	if err != nil {
@@ -95,12 +101,14 @@ func (n *Needle) ReadData(r backend.BackendStorageFile, offset int64, size Size,
 	return n.ReadBytes(bytes, offset, size, version)
 }
 
+//解析needle header数据
 func (n *Needle) ParseNeedleHeader(bytes []byte) {
 	n.Cookie = BytesToCookie(bytes[0:CookieSize])
 	n.Id = BytesToNeedleId(bytes[CookieSize : CookieSize+NeedleIdSize])
 	n.Size = BytesToSize(bytes[CookieSize+NeedleIdSize : NeedleHeaderSize])
 }
 
+//从bytes中读取meta+data
 func (n *Needle) readNeedleDataVersion2(bytes []byte) (err error) {
 	index, lenBytes := 0, len(bytes)
 	if index < lenBytes {
@@ -116,6 +124,8 @@ func (n *Needle) readNeedleDataVersion2(bytes []byte) (err error) {
 	_, err = n.readNeedleDataVersion2NonData(bytes[index:])
 	return
 }
+
+//解析meta数据
 func (n *Needle) readNeedleDataVersion2NonData(bytes []byte) (index int, err error) {
 	lenBytes := len(bytes)
 	if index < lenBytes {
@@ -176,6 +186,7 @@ func (n *Needle) readNeedleDataVersion2NonData(bytes []byte) (index int, err err
 	return index, nil
 }
 
+//从dat文件中读取needle的head
 func ReadNeedleHeader(r backend.BackendStorageFile, version Version, offset int64) (n *Needle, bytes []byte, bodyLength int64, err error) {
 	n = new(Needle)
 	if version == Version1 || version == Version2 || version == Version3 {

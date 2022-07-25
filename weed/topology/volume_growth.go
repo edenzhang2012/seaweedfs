@@ -3,9 +3,10 @@ package topology
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 	"math/rand"
 	"sync"
+
+	"github.com/chrislusf/seaweedfs/weed/pb/master_pb"
 
 	"google.golang.org/grpc"
 
@@ -78,6 +79,7 @@ func (vg *VolumeGrowth) findVolumeCount(copyCount int) (count int) {
 	return
 }
 
+//根据类型扩容volumes，具体就是根据当前的副本策略和拓扑结构，判断增加的volume应该所处的位置，并向相应的服务发送扩容volume的请求
 func (vg *VolumeGrowth) AutomaticGrowByType(option *VolumeGrowOption, grpcDialOption grpc.DialOption, topo *Topology, targetCount int) (result []*master_pb.VolumeLocation, err error) {
 	if targetCount == 0 {
 		targetCount = vg.findVolumeCount(option.ReplicaPlacement.GetCopyCount())
@@ -88,6 +90,8 @@ func (vg *VolumeGrowth) AutomaticGrowByType(option *VolumeGrowOption, grpcDialOp
 	}
 	return result, err
 }
+
+//按照volume增长个数和类型添加volume
 func (vg *VolumeGrowth) GrowByCountAndType(grpcDialOption grpc.DialOption, targetCount int, option *VolumeGrowOption, topo *Topology) (result []*master_pb.VolumeLocation, err error) {
 	vg.accessLock.Lock()
 	defer vg.accessLock.Unlock()
@@ -103,7 +107,9 @@ func (vg *VolumeGrowth) GrowByCountAndType(grpcDialOption grpc.DialOption, targe
 	return
 }
 
+//给volume找到一个槽位，然后增加新的volume
 func (vg *VolumeGrowth) findAndGrow(grpcDialOption grpc.DialOption, topo *Topology, option *VolumeGrowOption) (result []*master_pb.VolumeLocation, err error) {
+	//找到所有符合要求的server信息
 	servers, e := vg.findEmptySlotsForOneVolume(topo, option)
 	if e != nil {
 		return nil, e
@@ -112,6 +118,7 @@ func (vg *VolumeGrowth) findAndGrow(grpcDialOption grpc.DialOption, topo *Topolo
 	if raftErr != nil {
 		return nil, raftErr
 	}
+	//通知指定的server增加volume，并更新内存结构
 	if err = vg.grow(grpcDialOption, topo, vid, option, servers...); err == nil {
 		for _, server := range servers {
 			result = append(result, &master_pb.VolumeLocation{
@@ -129,10 +136,11 @@ func (vg *VolumeGrowth) findAndGrow(grpcDialOption grpc.DialOption, topo *Topolo
 // 2.2 collect all racks that have rp.SameRackCount+1
 // 2.2 collect all data centers that have DiffRackCount+rp.SameRackCount+1
 // 2. find rest data nodes
+//为volume查找一个合适的槽位，返回多个合适的位置
 func (vg *VolumeGrowth) findEmptySlotsForOneVolume(topo *Topology, option *VolumeGrowOption) (servers []*DataNode, err error) {
 	//find main datacenter and other data centers
 	rp := option.ReplicaPlacement
-	mainDataCenter, otherDataCenters, dc_err := topo.PickNodesByWeight(rp.DiffDataCenterCount+1, option, func(node Node) error {
+	mainDataCenter, otherDataCenters, dc_err := topo.PickNodesByWeight(rp.DiffDataCenterCount+1, option, func(node Node) error { //匿名函数：做一些容量与槽位的检查
 		if option.DataCenter != "" && node.IsDataCenter() && node.Id() != NodeId(option.DataCenter) {
 			return fmt.Errorf("Not matching preferred data center:%s", option.DataCenter)
 		}
@@ -227,6 +235,7 @@ func (vg *VolumeGrowth) findEmptySlotsForOneVolume(topo *Topology, option *Volum
 	return
 }
 
+//向所有该volume所在上级结构发送增加特定volume的请求
 func (vg *VolumeGrowth) grow(grpcDialOption grpc.DialOption, topo *Topology, vid needle.VolumeId, option *VolumeGrowOption, servers ...*DataNode) error {
 	for _, server := range servers {
 		if err := AllocateVolume(server, grpcDialOption, vid, option); err == nil {

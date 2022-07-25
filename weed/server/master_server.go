@@ -3,7 +3,6 @@ package weed_server
 import (
 	"context"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/stats"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/stats"
 
 	"github.com/chrislusf/seaweedfs/weed/cluster"
 	"github.com/chrislusf/seaweedfs/weed/pb"
@@ -53,15 +54,15 @@ type MasterOption struct {
 }
 
 type MasterServer struct {
-	master_pb.UnimplementedSeaweedServer
-	option *MasterOption
-	guard  *security.Guard
+	master_pb.UnimplementedSeaweedServer                 //基类
+	option                               *MasterOption   //matser 传参配置
+	guard                                *security.Guard //权限管理
 
 	preallocateSize int64
 
-	Topo *topology.Topology
-	vg   *topology.VolumeGrowth
-	vgCh chan *topology.VolumeGrowRequest
+	Topo *topology.Topology               //全局的拓扑结构入口
+	vg   *topology.VolumeGrowth           //
+	vgCh chan *topology.VolumeGrowRequest //volume grow通知
 
 	boundedLeaderChan chan int
 
@@ -70,7 +71,7 @@ type MasterServer struct {
 
 	// notifying clients
 	clientChansLock sync.RWMutex
-	clientChans     map[string]chan *master_pb.KeepConnectedResponse
+	clientChans     map[string]chan *master_pb.KeepConnectedResponse //client 通道
 
 	grpcDialOption grpc.DialOption
 
@@ -78,7 +79,7 @@ type MasterServer struct {
 
 	adminLocks *AdminLocks
 
-	Cluster *cluster.Cluster
+	Cluster *cluster.Cluster //集群相关信息
 }
 
 func NewMasterServer(r *mux.Router, option *MasterOption, peers map[string]pb.ServerAddress) *MasterServer {
@@ -122,6 +123,7 @@ func NewMasterServer(r *mux.Router, option *MasterOption, peers map[string]pb.Se
 
 	ms.MasterClient.OnPeerUpdate = ms.OnPeerUpdate
 
+	//多集群序列化生成器
 	seq := ms.createSequencer(option)
 	if nil == seq {
 		glog.Fatalf("create sequencer failed.")
@@ -130,8 +132,10 @@ func NewMasterServer(r *mux.Router, option *MasterOption, peers map[string]pb.Se
 	ms.vg = topology.NewDefaultVolumeGrowth()
 	glog.V(0).Infoln("Volume Size Limit is", ms.option.VolumeSizeLimitMB, "MB")
 
+	//认证加密权限相关
 	ms.guard = security.NewGuard(ms.option.WhiteList, signingKey, expiresAfterSec, readSigningKey, readExpiresAfterSec)
 
+	//注册http路径处理
 	handleStaticResources2(r)
 	r.HandleFunc("/", ms.proxyToLeader(ms.uiStatusHandler))
 	r.HandleFunc("/ui/index.html", ms.uiStatusHandler)
@@ -152,6 +156,10 @@ func NewMasterServer(r *mux.Router, option *MasterOption, peers map[string]pb.Se
 		r.HandleFunc("/{fileId}", ms.redirectHandler)
 	}
 
+	//启动几个协程处理与volumes相关的后台事务：
+	//1. 检查volume是否已满或者是否需要扩容，发出信号
+	//2. volume数据回收压缩，发出信号
+	//3. 等待上述事件信号并设置相应的volume参数
 	ms.Topo.StartRefreshWritableVolumes(
 		ms.grpcDialOption,
 		ms.option.GarbageThreshold,
@@ -159,8 +167,10 @@ func NewMasterServer(r *mux.Router, option *MasterOption, peers map[string]pb.Se
 		ms.preallocateSize,
 	)
 
+	//启动一个协程实际处理volume扩容事件
 	ms.ProcessGrowRequest()
 
+	//启动管理脚本
 	if !option.IsFollower {
 		ms.startAdminScripts()
 	}
@@ -208,6 +218,7 @@ func (ms *MasterServer) SetRaftServer(raftServer *RaftServer) {
 	}
 }
 
+//only leader serve this
 func (ms *MasterServer) proxyToLeader(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if ms.Topo.IsLeader() {
@@ -247,6 +258,7 @@ func (ms *MasterServer) proxyToLeader(f http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+//读取脚本文件，并定期在master上执行
 func (ms *MasterServer) startAdminScripts() {
 
 	v := util.GetViper()

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+
 	"github.com/chrislusf/seaweedfs/weed/stats"
 
 	"github.com/chrislusf/seaweedfs/weed/glog"
@@ -15,6 +16,7 @@ func (s *Store) CheckCompactVolume(volumeId needle.VolumeId) (float64, error) {
 	}
 	return 0, fmt.Errorf("volume id %d is not found during check compact", volumeId)
 }
+
 func (s *Store) CompactVolume(vid needle.VolumeId, preallocate int64, compactionBytePerSecond int64, progressFn ProgressFunc) error {
 	if v := s.findVolume(vid); v != nil {
 		s := stats.NewDiskStatus(v.dir)
