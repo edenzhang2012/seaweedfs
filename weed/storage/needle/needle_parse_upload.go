@@ -22,22 +22,22 @@ import (
 */
 
 type ParsedUpload struct {
-	FileName    string        //文件名
-	Data        []byte        //实际的数据，包含所有数据
-	bytesBuffer *bytes.Buffer //数据缓存，暂存每一个part的数据
-	MimeType    string
-	PairMap     map[string]string
-	IsGzipped   bool
+	FileName    string            //文件名
+	Data        []byte            //原始数据，从http请求读取到的，包含所有数据
+	bytesBuffer *bytes.Buffer     //数据缓存，暂存每一个part的数据
+	MimeType    string            //数据类型
+	PairMap     map[string]string //"seaweed-"开头的header选项
+	IsGzipped   bool              //是否gzip压缩包
 	// IsZstd           bool
-	OriginalDataSize int //原始数据大小
-	ModifiedTime     uint64
-	Ttl              *TTL
-	IsChunkedFile    bool
+	OriginalDataSize int    //原始数据大小，如果http传输下来的是压缩包，此处为解压之后的大小
+	ModifiedTime     uint64 //修改时间
+	Ttl              *TTL   //超时时间
+	IsChunkedFile    bool   //是否chunk manifest
 	UncompressedData []byte //未压缩的数据
 	ContentMd5       string //MD5字符串
 }
 
-//解析上传数据
+// 解析上传数据,填充到ParsedUpload结构体
 func ParseUpload(r *http.Request, sizeLimit int64, bytesBuffer *bytes.Buffer) (pu *ParsedUpload, e error) {
 	bytesBuffer.Reset()
 	pu = &ParsedUpload{bytesBuffer: bytesBuffer}
@@ -95,6 +95,7 @@ func ParseUpload(r *http.Request, sizeLimit int64, bytesBuffer *bytes.Buffer) (p
 	h := md5.New()
 	h.Write(pu.UncompressedData)
 	pu.ContentMd5 = base64.StdEncoding.EncodeToString(h.Sum(nil))
+	//比对checksum
 	if expectedChecksum := r.Header.Get("Content-MD5"); expectedChecksum != "" {
 		if expectedChecksum != pu.ContentMd5 {
 			e = fmt.Errorf("Content-MD5 did not match md5 of file data expected [%s] received [%s] size %d", expectedChecksum, pu.ContentMd5, len(pu.UncompressedData))

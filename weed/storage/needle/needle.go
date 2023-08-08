@@ -27,15 +27,24 @@ type Needle struct {
 	Id     NeedleId `comment:"needle id"`
 	Size   Size     `comment:"sum of DataSize,Data,NameSize,Name,MimeSize,Mime"`
 
-	DataSize     uint32 `comment:"Data size"`            //version2
-	Data         []byte `comment:"The actual file data"` //实际的数据
-	Flags        byte   `comment:"boolean flags"`        //version2
+	DataSize uint32 `comment:"Data size"`            //version2
+	Data     []byte `comment:"The actual file data"` //数据，压缩过的
+	/*
+		FlagIsCompressed        = 0x01
+		FlagHasName             = 0x02
+		FlagHasMime             = 0x04
+		FlagHasLastModifiedDate = 0x08
+		FlagHasTtl              = 0x10
+		FlagHasPairs            = 0x20
+		FlagIsChunkManifest     = 0x80
+	*/
+	Flags        byte   `comment:"boolean flags"` //version2
 	NameSize     uint8  //version2
 	Name         []byte `comment:"maximum 255 characters"` //version2
 	MimeSize     uint8  //version2
 	Mime         []byte `comment:"maximum 255 characters"` //version2
 	PairsSize    uint16 //version2
-	Pairs        []byte `comment:"additional name value pairs, json format, maximum 64kB"`
+	Pairs        []byte `comment:"additional name value pairs, json format, maximum 64kB"` //额外的键值对，key以“seaweed-”开头
 	LastModified uint64 //only store LastModifiedBytesLength bytes, which is 5 bytes to disk
 	Ttl          *TTL
 
@@ -99,6 +108,7 @@ func CreateNeedleFromRequest(r *http.Request, fixJpgOrientation bool, sizeLimit 
 		n.SetIsChunkManifest()
 	}
 
+	//jpg图片展示方向修正，引入了另外一个处理库
 	if fixJpgOrientation {
 		loweredName := strings.ToLower(pu.FileName)
 		if pu.MimeType == "image/jpeg" || strings.HasSuffix(loweredName, ".jpg") || strings.HasSuffix(loweredName, ".jpeg") {

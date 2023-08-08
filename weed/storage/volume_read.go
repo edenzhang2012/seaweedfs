@@ -27,6 +27,7 @@ func (v *Volume) readNeedle(n *needle.Needle, readOption *ReadOption, onReadSize
 	if !ok || nv.Offset.IsZero() {
 		return -1, ErrorNotFound
 	}
+	//
 	readSize := nv.Size
 	//needle已经被删除
 	if readSize.IsDeleted() {

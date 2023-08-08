@@ -39,7 +39,7 @@ type VolumeServer struct {
 	grpcDialOption  grpc.DialOption
 
 	needleMapKind           storage.NeedleMapKind
-	FixJpgOrientation       bool
+	FixJpgOrientation       bool   //是否需要修正jpg显示方向
 	ReadMode                string //local ，proxy or redirect
 	compactionBytePerSecond int64
 	metricsAddress          string

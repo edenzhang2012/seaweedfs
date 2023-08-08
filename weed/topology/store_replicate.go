@@ -21,7 +21,7 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/util"
 )
 
-//needle多副本数据落盘
+// needle多副本数据落盘
 func ReplicatedWrite(masterFn operation.GetMasterFn, grpcDialOption grpc.DialOption, s *storage.Store, volumeId needle.VolumeId, n *needle.Needle, r *http.Request) (isUnchanged bool, err error) {
 
 	//check JWT
@@ -176,7 +176,7 @@ func DistributedOperation(locations []operation.Location, op func(location opera
 	return ret.Error()
 }
 
-//获取多副本数据落盘信息
+// 获取多副本数据落盘信息
 func GetWritableRemoteReplications(s *storage.Store, grpcDialOption grpc.DialOption, volumeId needle.VolumeId, masterFn operation.GetMasterFn) (remoteLocations []operation.Location, err error) {
 
 	v := s.GetVolume(volumeId)
@@ -201,7 +201,7 @@ func GetWritableRemoteReplications(s *storage.Store, grpcDialOption grpc.DialOpt
 	if v != nil { //本地有副本
 		// has one local and has remote replications
 		copyCount := v.ReplicaPlacement.GetCopyCount()
-		if len(lookupResult.Locations) < copyCount { //本地副本数小于配置的副本数
+		if len(lookupResult.Locations) < copyCount { //副本数小于配置的副本数
 			err = fmt.Errorf("replicating opetations [%d] is less than volume %d replication copy count [%d]",
 				len(lookupResult.Locations), volumeId, copyCount)
 		}

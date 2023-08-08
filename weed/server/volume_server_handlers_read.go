@@ -142,6 +142,7 @@ func (vs *VolumeServer) GetOrHeadHandler(w http.ResponseWriter, r *http.Request)
 		atomic.AddInt64(&vs.inFlightDownloadDataSize, int64(needleSize))
 	}
 	if hasVolume {
+		//读取对应volumeID中n.ID的数据到needle里
 		count, err = vs.store.ReadVolumeNeedle(volumeId, n, readOption, onReadSizeFn)
 	} else if hasEcVolume {
 		count, err = vs.store.ReadEcShardNeedle(volumeId, n, onReadSizeFn)
