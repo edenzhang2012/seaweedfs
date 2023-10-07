@@ -25,7 +25,8 @@ const (
 type Needle struct {
 	Cookie Cookie   `comment:"random number to mitigate brute force lookups"`
 	Id     NeedleId `comment:"needle id"`
-	Size   Size     `comment:"sum of DataSize,Data,NameSize,Name,MimeSize,Mime"`
+	//version 1： 只表示data的长度；version 2,3： 表示
+	Size Size `comment:"sum of DataSize,Data,NameSize,Name,MimeSize,Mime"`
 
 	DataSize uint32 `comment:"Data size"`            //version2
 	Data     []byte `comment:"The actual file data"` //数据，压缩过的

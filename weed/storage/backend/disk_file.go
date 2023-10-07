@@ -58,6 +58,7 @@ func (df *DiskFile) Write(p []byte) (n int, err error) {
 	return df.WriteAt(p, df.fileSize)
 }
 
+// 同truncate
 func (df *DiskFile) Truncate(off int64) error {
 	err := df.File.Truncate(off)
 	if err == nil {
@@ -71,6 +72,7 @@ func (df *DiskFile) Close() error {
 	return df.File.Close()
 }
 
+// 返回当前数据读写所在offset
 func (df *DiskFile) GetStat() (datSize int64, modTime time.Time, err error) {
 	if df.File == nil {
 		err = os.ErrInvalid

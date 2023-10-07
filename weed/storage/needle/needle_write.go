@@ -46,21 +46,21 @@ func (n *Needle) prepareWriteBuffer(version Version, writeBytes *bytes.Buffer) (
 		}
 		n.DataSize, n.MimeSize = uint32(len(n.Data)), uint8(len(n.Mime))
 		if n.DataSize > 0 {
-			n.Size = 4 + Size(n.DataSize) + 1
+			n.Size = 4 + Size(n.DataSize) + 1 //sizeof(DataSize)+flags
 			if n.HasName() {
-				n.Size = n.Size + 1 + Size(n.NameSize)
+				n.Size = n.Size + 1 + Size(n.NameSize) //sizeof(NameSize)+NameSize
 			}
 			if n.HasMime() {
-				n.Size = n.Size + 1 + Size(n.MimeSize)
+				n.Size = n.Size + 1 + Size(n.MimeSize) //sizeof(MimeSize)+MimeSize
 			}
 			if n.HasLastModifiedDate() {
-				n.Size = n.Size + LastModifiedBytesLength
+				n.Size = n.Size + LastModifiedBytesLength //固定长度
 			}
 			if n.HasTtl() {
-				n.Size = n.Size + TtlBytesLength
+				n.Size = n.Size + TtlBytesLength //固定长度
 			}
 			if n.HasPairs() {
-				n.Size += 2 + Size(n.PairsSize)
+				n.Size += 2 + Size(n.PairsSize) //sizeof(PairsSize)+PairsSize
 			}
 		} else {
 			n.Size = 0
@@ -113,7 +113,7 @@ func (n *Needle) prepareWriteBuffer(version Version, writeBytes *bytes.Buffer) (
 	return 0, 0, fmt.Errorf("Unsupported Version! (%d)", version)
 }
 
-//将needle中内容写入到BackendStorageFile中
+// 将needle中内容写入到BackendStorageFile中
 func (n *Needle) Append(w backend.BackendStorageFile, version Version) (offset uint64, size Size, actualSize int64, err error) {
 
 	if end, _, e := w.GetStat(); e == nil {

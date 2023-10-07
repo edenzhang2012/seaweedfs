@@ -176,6 +176,7 @@ func (cs *CompactSection) Get(key NeedleId) (*NeedleValue, bool) {
 	cs.RUnlock()
 	return nil, false
 }
+//二分查找，找到了返回下标
 func (cs *CompactSection) binarySearchValues(key SectionalNeedleId) int {
 	x := sort.Search(cs.counter, func(i int) bool {
 		return cs.values[i].Key >= key

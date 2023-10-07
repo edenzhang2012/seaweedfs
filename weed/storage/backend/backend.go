@@ -16,9 +16,9 @@ import (
 type BackendStorageFile interface {
 	io.ReaderAt
 	io.WriterAt
-	Truncate(off int64) error
+	Truncate(off int64) error //同truncate
 	io.Closer
-	GetStat() (datSize int64, modTime time.Time, err error)
+	GetStat() (datSize int64, modTime time.Time, err error) //返回当前读写offset
 	Name() string
 	Sync() error //目前都是空实现
 }

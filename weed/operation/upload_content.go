@@ -24,7 +24,7 @@ type UploadOption struct {
 	UploadUrl         string              //上传地址
 	Filename          string              //文件名
 	Cipher            bool                //是否加密
-	IsInputCompressed bool                //是否压缩
+	IsInputCompressed bool                //传进来的数据是否已压缩
 	MimeType          string              //文件类型
 	PairMap           map[string]string   //自定义参数
 	Jwt               security.EncodedJwt //jwt
@@ -134,7 +134,7 @@ func doUploadData(data []byte, option *UploadOption) (uploadResult *UploadResult
 			shouldGzipNow = true
 		} else if !iAmSure && option.MimeType == "" && len(data) > 16*1024 {
 			var compressed []byte
-			compressed, err = util.GzipData(data[0:128])
+			compressed, _ = util.GzipData(data[0:128])
 			shouldGzipNow = len(compressed)*10 < 128*9 // can not compress to less than 90%
 		}
 	}
