@@ -1,8 +1,9 @@
 package chunk_cache
 
 import (
-	"github.com/karlseguin/ccache/v2"
 	"time"
+
+	"github.com/karlseguin/ccache/v2"
 )
 
 // a global cache for recently accessed file chunks
@@ -11,7 +12,7 @@ type ChunkCacheInMemory struct {
 }
 
 func NewChunkCacheInMemory(maxEntries int64) *ChunkCacheInMemory {
-	pruneCount := maxEntries >> 3
+	pruneCount := maxEntries >> 3 //256*2^3=2048
 	if pruneCount <= 0 {
 		pruneCount = 500
 	}

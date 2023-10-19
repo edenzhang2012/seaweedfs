@@ -3,7 +3,6 @@ package weed_server
 import (
 	"context"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/s3api/s3_constants"
 	"io"
 	"net/http"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/s3api/s3_constants"
 
 	"github.com/chrislusf/seaweedfs/weed/filer"
 	"github.com/chrislusf/seaweedfs/weed/glog"
@@ -262,6 +263,7 @@ func (fs *FilerServer) saveMetaData(ctx context.Context, r *http.Request, fileNa
 
 func (fs *FilerServer) saveAsChunk(so *operation.StorageOption) filer.SaveDataAsChunkFunctionType {
 
+	//分配fid并将reader中读取的数据写入volume
 	return func(reader io.Reader, name string, offset int64) (*filer_pb.FileChunk, string, string, error) {
 		// assign one file id for one chunk
 		fileId, urlLocation, auth, assignErr := fs.assignNewFileInfo(so)

@@ -263,6 +263,7 @@ func handleStaticResources2(r *mux.Router) {
 	r.PathPrefix("/seaweedfsstatic/").Handler(http.StripPrefix("/seaweedfsstatic", http.FileServer(http.FS(StaticFS))))
 }
 
+// 填充header信息
 func adjustPassthroughHeaders(w http.ResponseWriter, r *http.Request, filename string) {
 	for header, values := range r.Header {
 		if normalizedHeader, ok := s3_constants.PassThroughHeaders[strings.ToLower(header)]; ok {

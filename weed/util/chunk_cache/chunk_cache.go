@@ -17,12 +17,12 @@ type ChunkCache interface {
 
 // a global cache for recently accessed file chunks
 type TieredChunkCache struct {
-	memCache   *ChunkCacheInMemory
-	diskCaches []*OnDiskCacheLayer
+	memCache   *ChunkCacheInMemory //内存中的cache，ccache包管理
+	diskCaches []*OnDiskCacheLayer //磁盘上的cache，默认三层
 	sync.RWMutex
-	onDiskCacheSizeLimit0 uint64
-	onDiskCacheSizeLimit1 uint64
-	onDiskCacheSizeLimit2 uint64
+	onDiskCacheSizeLimit0 uint64 //1M
+	onDiskCacheSizeLimit1 uint64 //4M
+	onDiskCacheSizeLimit2 uint64 //8M
 }
 
 var _ ChunkCache = &TieredChunkCache{}
@@ -30,7 +30,7 @@ var _ ChunkCache = &TieredChunkCache{}
 func NewTieredChunkCache(maxEntries int64, dir string, diskSizeInUnit int64, unitSize int64) *TieredChunkCache {
 
 	c := &TieredChunkCache{
-		memCache: NewChunkCacheInMemory(maxEntries),
+		memCache: NewChunkCacheInMemory(maxEntries),//默认256
 	}
 	c.diskCaches = make([]*OnDiskCacheLayer, 3)
 	c.onDiskCacheSizeLimit0 = uint64(unitSize)

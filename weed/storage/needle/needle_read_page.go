@@ -65,12 +65,13 @@ func (n *Needle) ReadNeedleMeta(r backend.BackendStorageFile, offset int64, size
 
 	bytes := make([]byte, NeedleHeaderSize+DataSizeSize)
 
+	//读取needle header
 	count, err := r.ReadAt(bytes, offset)
 	if count != NeedleHeaderSize+DataSizeSize || err != nil {
 		return err
 	}
 	n.ParseNeedleHeader(bytes)
-	//容量检查
+	//容量检查,size为needlemap中记录的大小
 	if n.Size != size {
 		if OffsetSize == 4 && offset < int64(MaxPossibleVolumeSize) {
 			return ErrorSizeMismatch
@@ -85,6 +86,7 @@ func (n *Needle) ReadNeedleMeta(r backend.BackendStorageFile, offset int64, size
 	metaSize := stopOffset - startOffset
 	metaSlice := make([]byte, int(metaSize))
 
+	//读取meta
 	count, err = r.ReadAt(metaSlice, startOffset)
 	if err != nil && int64(count) == metaSize {
 		err = nil

@@ -24,7 +24,7 @@ type UploadPipeline struct {
 	saveToStorageFn      SaveToStorageFunc
 	activeReadChunks     map[LogicChunkIndex]int
 	activeReadChunksLock sync.Mutex
-	writableChunkLimit   int
+	writableChunkLimit   int//并发写的协程数，默认32
 	swapFile             *SwapFile
 }
 

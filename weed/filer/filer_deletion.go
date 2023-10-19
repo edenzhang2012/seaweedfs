@@ -11,7 +11,7 @@ import (
 	"github.com/chrislusf/seaweedfs/weed/wdclient"
 )
 
-//向master获取vid位置信息
+// 向master获取vid位置信息
 func LookupByMasterClientFn(masterClient *wdclient.MasterClient) func(vids []string) (map[string]*operation.LookupResult, error) {
 	return func(vids []string) (map[string]*operation.LookupResult, error) {
 		m := make(map[string]*operation.LookupResult)
@@ -143,14 +143,15 @@ func (f *Filer) DeleteChunksNotRecursive(chunks []*filer_pb.FileChunk) {
 
 func (f *Filer) deleteChunksIfNotNew(oldEntry, newEntry *Entry) {
 
-	if oldEntry == nil {
+	if oldEntry == nil { //新建场景
 		return
 	}
-	if newEntry == nil {
+	if newEntry == nil { //删除场景
 		f.DeleteChunks(oldEntry.Chunks)
 		return
 	}
 
+	//update场景
 	var toDelete []*filer_pb.FileChunk
 	newChunkIds := make(map[string]bool)
 	newDataChunks, newManifestChunks, err := ResolveChunkManifest(f.MasterClient.GetLookupFileIdFunction(),
