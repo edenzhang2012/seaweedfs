@@ -40,10 +40,10 @@ type ChunkManifest struct {
 
 // seekable chunked file reader
 type ChunkedFileReader struct {
-	totalSize      int64
-	chunkList      []*ChunkInfo
-	master         pb.ServerAddress
-	pos            int64
+	totalSize      int64            //整个文件总大小
+	chunkList      []*ChunkInfo     //所有的chunk列表
+	master         pb.ServerAddress //master地址
+	pos            int64            //当前读写指针所在位置
 	pr             *io.PipeReader
 	pw             *io.PipeWriter
 	mutex          sync.Mutex
@@ -54,7 +54,7 @@ func (s ChunkList) Len() int           { return len(s) }
 func (s ChunkList) Less(i, j int) bool { return s[i].Offset < s[j].Offset }
 func (s ChunkList) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-//从buffer中获取ChunkManifest
+// 从buffer中获取ChunkManifest
 func LoadChunkManifest(buffer []byte, isCompressed bool) (*ChunkManifest, error) {
 	//解压
 	if isCompressed {
@@ -76,6 +76,7 @@ func (cm *ChunkManifest) Marshal() ([]byte, error) {
 	return json.Marshal(cm)
 }
 
+// 删除ChunkManifest中所有的chunks
 func (cm *ChunkManifest) DeleteChunks(masterFn GetMasterFn, usePublicUrl bool, grpcDialOption grpc.DialOption) error {
 	var fileIds []string
 	for _, ci := range cm.Chunks {
@@ -96,6 +97,7 @@ func (cm *ChunkManifest) DeleteChunks(masterFn GetMasterFn, usePublicUrl bool, g
 	return nil
 }
 
+// 向volume发送http请求获取数据
 func readChunkNeedle(fileUrl string, w io.Writer, offset int64, jwt string) (written int64, e error) {
 	req, err := http.NewRequest("GET", fileUrl, nil)
 	if err != nil {
@@ -130,7 +132,7 @@ func readChunkNeedle(fileUrl string, w io.Writer, offset int64, jwt string) (wri
 	return io.Copy(w, resp.Body)
 }
 
-//生成ChunkedFile的读IO流
+// 生成ChunkedFile的读IO流
 func NewChunkedFileReader(chunkList []*ChunkInfo, master pb.ServerAddress, grpcDialOption grpc.DialOption) *ChunkedFileReader {
 	var totalSize int64
 	for _, chunk := range chunkList {
@@ -167,6 +169,7 @@ func (cf *ChunkedFileReader) Seek(offset int64, whence int) (int64, error) {
 func (cf *ChunkedFileReader) WriteTo(w io.Writer) (n int64, err error) {
 	chunkIndex := -1
 	chunkStartOffset := int64(0)
+	//先找到当前pos所在的chunk
 	for i, ci := range cf.chunkList {
 		if cf.pos >= ci.Offset && cf.pos < ci.Offset+ci.Size {
 			chunkIndex = i

@@ -45,7 +45,8 @@ func (v *Volume) readNeedle(n *needle.Needle, readOption *ReadOption, onReadSize
 	if onReadSizeFn != nil {
 		onReadSizeFn(readSize)
 	}
-	//只读取meta数据且文件长度大于1M
+	//TODO:这里有个问题，如果readSize小于1M且尝试只读取meta，如何处理
+	//尝试只读取meta数据但文件长度大于1M
 	if readOption != nil && readOption.AttemptMetaOnly && readSize > PagedReadLimit {
 		readOption.VolumeRevision = v.SuperBlock.CompactionRevision
 		//读取并解析needle meta信息

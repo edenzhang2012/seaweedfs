@@ -32,7 +32,7 @@ type ReadOption struct {
 	AttemptMetaOnly bool //尝试只读取元数据
 	MustMetaOnly    bool //只读取元数据，暂未使用
 	// response
-	IsMetaOnly     bool // read status
+	IsMetaOnly     bool // read status 只有当AttemptMetaOnly为true（head请求或者非图片数据），且是没有压缩的非chunked数据时，为true
 	VolumeRevision uint16
 	IsOutOfRange   bool // whether read over MaxPossibleVolumeSize
 }

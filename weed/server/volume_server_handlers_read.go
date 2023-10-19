@@ -236,11 +236,12 @@ func (vs *VolumeServer) GetOrHeadHandler(w http.ResponseWriter, r *http.Request)
 			glog.V(2).Infoln("response write error:", e)
 		}
 	} else {
+		//TODO： 从目前的实现来看，大文件读取永远也不会走到这里
 		vs.streamWriteResponseContent(filename, mtype, volumeId, n, w, r, readOption)
 	}
 }
 
-// 根据http请求判断是否只读取元数据
+// 根据http请求判断是否只读取元数据:明确指定为head请求或者是非图片数据
 func shouldAttemptStreamWrite(hasLocalVolume bool, ext string, r *http.Request) (shouldAttempt bool, mustMetaOnly bool) {
 	if !hasLocalVolume {
 		return false, false
@@ -259,7 +260,7 @@ func shouldAttemptStreamWrite(hasLocalVolume bool, ext string, r *http.Request) 
 	return true, false
 }
 
-// 如果有chunckfile，从chunckfile的索引中查找chunks并读取数据到data中
+// 如果本needle数据是chunckfile，从chunckfile的索引中查找chunks并读取数据到data中
 func (vs *VolumeServer) tryHandleChunkedFile(n *needle.Needle, fileName string, ext string, w http.ResponseWriter, r *http.Request) (processed bool) {
 	//没有cm标记，或者http请求明确指定”cm“==”false“，不处理
 	if !n.IsChunkedManifest() || r.URL.Query().Get("cm") == "false" {
@@ -329,7 +330,9 @@ func shouldResizeImages(ext string, r *http.Request) (width, height int, mode st
 	return
 }
 
+// 填充返回信息（包括meta与data）
 func writeResponseContent(filename, mimeType string, rs io.ReadSeeker, w http.ResponseWriter, r *http.Request) error {
+	//通过seek直接定位指标到末尾获取文件大小
 	totalSize, e := rs.Seek(0, 2)
 	if mimeType == "" {
 		if ext := filepath.Ext(filename); ext != "" {
@@ -360,6 +363,7 @@ func writeResponseContent(filename, mimeType string, rs io.ReadSeeker, w http.Re
 	return nil
 }
 
+// 设计的本意是要流式读取大文件，但好像逻辑并不能走到这里
 func (vs *VolumeServer) streamWriteResponseContent(filename string, mimeType string, volumeId needle.VolumeId, n *needle.Needle, w http.ResponseWriter, r *http.Request, readOption *storage.ReadOption) {
 	totalSize := int64(n.DataSize)
 	if mimeType == "" {
