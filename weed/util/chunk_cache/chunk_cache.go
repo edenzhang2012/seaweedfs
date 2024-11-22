@@ -30,7 +30,7 @@ var _ ChunkCache = &TieredChunkCache{}
 func NewTieredChunkCache(maxEntries int64, dir string, diskSizeInUnit int64, unitSize int64) *TieredChunkCache {
 
 	c := &TieredChunkCache{
-		memCache: NewChunkCacheInMemory(maxEntries),//默认256
+		memCache: NewChunkCacheInMemory(maxEntries), //默认256
 	}
 	c.diskCaches = make([]*OnDiskCacheLayer, 3)
 	c.onDiskCacheSizeLimit0 = uint64(unitSize)
@@ -43,6 +43,7 @@ func NewTieredChunkCache(maxEntries int64, dir string, diskSizeInUnit int64, uni
 	return c
 }
 
+// 根据golang切片的逻辑，此时的data虽然是空的，但len()是有值的，等于要读取数据的长度
 func (c *TieredChunkCache) ReadChunkAt(data []byte, fileId string, offset uint64) (n int, err error) {
 	if c == nil {
 		return 0, nil
