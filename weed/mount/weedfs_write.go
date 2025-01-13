@@ -74,7 +74,7 @@ func (wfs *WFS) saveDataAsChunk(fullPath util.FullPath) filer.SaveDataAsChunkFun
 			return nil, "", "", fmt.Errorf("upload result: %v", uploadResult.Error)
 		}
 
-		if offset == 0 {
+		if offset == 0 { //？？？为啥只缓存offset为0的
 			wfs.chunkCache.SetChunk(fileId, data)
 		}
 

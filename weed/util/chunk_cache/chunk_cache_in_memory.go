@@ -12,7 +12,7 @@ type ChunkCacheInMemory struct {
 }
 
 func NewChunkCacheInMemory(maxEntries int64) *ChunkCacheInMemory {
-	pruneCount := maxEntries >> 3 //256*2^3=2048
+	pruneCount := maxEntries >> 3 //256/2^3=32
 	if pruneCount <= 0 {
 		pruneCount = 500
 	}

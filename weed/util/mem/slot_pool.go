@@ -1,9 +1,10 @@
 package mem
 
 import (
-	"github.com/chrislusf/seaweedfs/weed/glog"
 	"sync"
 	"sync/atomic"
+
+	"github.com/chrislusf/seaweedfs/weed/glog"
 )
 
 var pools []*sync.Pool
@@ -20,7 +21,7 @@ func bitCount(size int) (count int) {
 }
 
 func init() {
-	// 1KB ~ 256MB
+	// 1KB ~ 256MB 1KB、2KB、4KB ~ 64MB、128MB、256MB
 	pools = make([]*sync.Pool, bitCount(1024*1024*256))
 	for i := 0; i < len(pools); i++ {
 		slotSize := 1024 << i

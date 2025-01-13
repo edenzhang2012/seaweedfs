@@ -2,11 +2,12 @@ package filer
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/chrislusf/seaweedfs/weed/util/chunk_cache"
 	"github.com/chrislusf/seaweedfs/weed/util/mem"
 	"github.com/chrislusf/seaweedfs/weed/wdclient"
-	"sync"
-	"time"
 )
 
 type ReaderCache struct {
@@ -29,7 +30,7 @@ type SingleChunkCacher struct {
 	chunkSize     int
 	shouldCache   bool
 	wg            sync.WaitGroup
-	completedTime time.Time
+	completedTime time.Time //完成缓存的时间
 }
 
 func newReaderCache(limit int, chunkCache chunk_cache.ChunkCache, lookupFileIdFn wdclient.LookupFileIdFunctionType) *ReaderCache {

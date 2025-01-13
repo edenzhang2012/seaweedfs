@@ -294,6 +294,7 @@ func processRangeRequest(r *http.Request, w http.ResponseWriter, totalSize int64
 	defer bufferedWriter.Flush()
 
 	if rangeReq == "" {
+		//can not be here，前面有过滤这个条件
 		w.Header().Set("Content-Length", strconv.FormatInt(totalSize, 10))
 		if err := writeFn(bufferedWriter, 0, totalSize); err != nil {
 			glog.Errorf("processRangeRequest headers: %+v err: %v", w.Header(), err)

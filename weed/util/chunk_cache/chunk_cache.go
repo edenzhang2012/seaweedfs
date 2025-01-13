@@ -58,7 +58,7 @@ func (c *TieredChunkCache) ReadChunkAt(data []byte, fileId string, offset uint64
 		if err != nil {
 			glog.Errorf("failed to read from memcache: %s", err)
 		}
-		if n >= int(minSize) {
+		if n >= int(minSize) { //FIXME ???这里应该改成 if n == len(data)
 			return n, nil
 		}
 	}
@@ -71,19 +71,19 @@ func (c *TieredChunkCache) ReadChunkAt(data []byte, fileId string, offset uint64
 
 	if minSize <= c.onDiskCacheSizeLimit0 {
 		n, err = c.diskCaches[0].readChunkAt(data, fid.Key, offset)
-		if n >= int(minSize) {
+		if n >= int(minSize) {//FIXME 同上
 			return
 		}
 	}
 	if minSize <= c.onDiskCacheSizeLimit1 {
 		n, err = c.diskCaches[1].readChunkAt(data, fid.Key, offset)
-		if n >= int(minSize) {
+		if n >= int(minSize) {//FIXME 同上
 			return
 		}
 	}
 	{
 		n, err = c.diskCaches[2].readChunkAt(data, fid.Key, offset)
-		if n >= int(minSize) {
+		if n >= int(minSize) {//FIXME 同上
 			return
 		}
 	}

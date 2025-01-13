@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/chrislusf/seaweedfs/weed/s3api/s3_constants"
-	"github.com/chrislusf/seaweedfs/weed/util/mem"
 	"io"
 	"math"
 	"mime"
@@ -14,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/chrislusf/seaweedfs/weed/s3api/s3_constants"
+	"github.com/chrislusf/seaweedfs/weed/util/mem"
 
 	"github.com/chrislusf/seaweedfs/weed/filer"
 	"github.com/chrislusf/seaweedfs/weed/glog"
@@ -25,10 +26,11 @@ import (
 
 // Validates the preconditions. Returns true if GET/HEAD operation should not proceed.
 // Preconditions supported are:
-//  If-Modified-Since
-//  If-Unmodified-Since
-//  If-Match
-//  If-None-Match
+//
+//	If-Modified-Since
+//	If-Unmodified-Since
+//	If-Match
+//	If-None-Match
 func checkPreconditions(w http.ResponseWriter, r *http.Request, entry *filer.Entry) bool {
 
 	etag := filer.ETagEntry(entry)
